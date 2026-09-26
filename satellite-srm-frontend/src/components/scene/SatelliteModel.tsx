@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, Suspense } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useGLTF, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -333,6 +333,32 @@ export const ProceduralSatellite: React.FC = () => {
           <meshStandardMaterial {...CHROME as any} />
         </mesh>
       ))}
+      
+      {/* ─── 9. SATELLITE NAME ON ALL SIDES ────────────────── */}
+      {/* Right Face (+X) */}
+      <Text position={[0.116, 0, 0]} rotation={[0, Math.PI / 2, 0]} fontSize={0.035} color="#000000" anchorX="center" anchorY="middle" fontWeight="bold">
+        NexTerra
+      </Text>
+      {/* Left Face (-X) */}
+      <Text position={[-0.116, 0, 0]} rotation={[0, -Math.PI / 2, 0]} fontSize={0.035} color="#000000" anchorX="center" anchorY="middle" fontWeight="bold">
+        NexTerra
+      </Text>
+      {/* Top Face (+Y) */}
+      <Text position={[0, 0.111, 0]} rotation={[-Math.PI / 2, 0, 0]} fontSize={0.035} color="#000000" anchorX="center" anchorY="middle" fontWeight="bold">
+        NexTerra
+      </Text>
+      {/* Bottom Face (-Y) */}
+      <Text position={[0, -0.111, 0]} rotation={[Math.PI / 2, 0, Math.PI]} fontSize={0.035} color="#000000" anchorX="center" anchorY="middle" fontWeight="bold">
+        NexTerra
+      </Text>
+      {/* Front Face (Anti-nadir, -Z) */}
+      <Text position={[0, 0, -0.151]} rotation={[0, Math.PI, 0]} fontSize={0.035} color="#000000" anchorX="center" anchorY="middle" fontWeight="bold">
+        NexTerra
+      </Text>
+      {/* Back Face (Nadir, +Z, placed above payload) */}
+      <Text position={[0, 0.07, 0.141]} rotation={[0, 0, 0]} fontSize={0.025} color="#000000" anchorX="center" anchorY="middle" fontWeight="bold">
+        NexTerra
+      </Text>
     </group>
   );
 };

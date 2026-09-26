@@ -4,8 +4,29 @@ import { OrbitControls } from '@react-three/drei';
 import { RealisticEarth } from '../scene/RealisticEarth';
 import { Satellite } from '../scene/Satellite';
 import { StarField } from '../scene/StarField';
+import { DeepSpaceElements } from '../scene/DeepSpaceElements';
 import { ErrorBoundary } from '../scene/ErrorBoundary';
 import { Satellite as SatelliteIcon } from 'lucide-react';
+import * as THREE from 'three';
+import { useThree, useFrame } from '@react-three/fiber';
+
+// ── INTRO ZOOM ANIMATION ──
+// Camera starts at (60,30,90) via the Canvas camera prop — no jump, no flicker.
+// Immediately starts the smooth lerp toward Earth.
+const IntroAnimation: React.FC<{ onFinished: () => void }> = ({ onFinished }) => {
+  const { camera } = useThree();
+
+  useFrame(() => {
+    const targetPos = new THREE.Vector3(0, 0.2, 3.8);
+    camera.position.lerp(targetPos, 0.02);
+    camera.lookAt(0, 0, 0);
+
+    if (camera.position.distanceTo(targetPos) < 0.5) {
+      onFinished();
+    }
+  });
+  return null;
+};
 
 interface EarthSceneProps {
   interactive?: boolean;
@@ -72,6 +93,7 @@ export const EarthScene: React.FC<EarthSceneProps> = ({
 }) => {
   const [hasWebGL, setHasWebGL] = useState<boolean>(true);
   const [isInteracting, setIsInteracting] = useState<boolean>(false);
+  const [introDone, setIntroDone] = useState<boolean>(false);
 
   useEffect(() => {
     try {
@@ -103,7 +125,7 @@ export const EarthScene: React.FC<EarthSceneProps> = ({
       {/* ErrorBoundary wraps WebGL Canvas */}
       <ErrorBoundary fallback={<EarthVisualFallback />}>
         <Canvas
-          camera={{ position: [0, 0.2, 3.8], fov: 42 }}
+          camera={{ position: [60, 30, 90], fov: 42 }}
           gl={{
             antialias: true,
             alpha: true,
@@ -116,6 +138,9 @@ export const EarthScene: React.FC<EarthSceneProps> = ({
         >
           {/* Deep Space Background Stars with subtle gentle movement */}
           <StarField count={2200} speed={0.6} />
+
+          {/* Meteoroids and Distant Planets */}
+          <DeepSpaceElements />
 
           {/* ── ENHANCED CINEMATIC ILLUMINATION (matching reference) ── */}
           {/* 1. Low ambient to allow metallic highlights to pop */}
@@ -151,10 +176,7 @@ export const EarthScene: React.FC<EarthSceneProps> = ({
           />
 
           <Suspense fallback={null}>
-            {/* 1. Photorealistic NASA Earth (Continents, Oceans, Clouds, City Lights) */}
             <RealisticEarth />
-
-            {/* 2. Recognizable 3D Satellite Spacecraft + Elliptical Orbit + Scanning Observation Beam */}
             {showSatellite && (
               <Satellite
                 orbitRadius={1.82}
@@ -166,14 +188,16 @@ export const EarthScene: React.FC<EarthSceneProps> = ({
             )}
           </Suspense>
 
-          {interactive && (
+          {!introDone && <IntroAnimation onFinished={() => setIntroDone(true)} />}
+
+          {introDone && interactive && (
             <OrbitControls
               enableRotate={true}
               autoRotate={!isInteracting}
               autoRotateSpeed={autoRotateSpeed}
               enableZoom={enableZoom}
               minDistance={2.2}
-              maxDistance={6.0}
+              maxDistance={250.0}
               enablePan={false}
               enableDamping={true}
               dampingFactor={0.06}
