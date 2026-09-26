@@ -6,7 +6,7 @@ import "./index.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {" "}
-    <ThemeProvider defaultTheme="light" storageKey="terrars-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="terrars-theme">
       {" "}
       <App />{" "}
     </ThemeProvider>{" "}
