@@ -97,7 +97,7 @@ export const Hero: React.FC = () => {
           <div className="hero-earth relative h-[400px] sm:h-[500px] lg:h-[700px] flex items-center justify-center">
             {/* Soft backdrop for Earth */}
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-transparent rounded-full blur-[80px] -z-10" />
-            <div className="w-full h-full max-w-[600px] mx-auto">
+            <div className="w-full h-full max-w-[850px] lg:w-[130%] lg:max-w-none mx-auto lg:ml-0 lg:-mr-[30%]">
               <ErrorBoundary fallback={<EarthVisualFallback />}>
                 <EarthScene interactive={true} showHint={true} />
               </ErrorBoundary>

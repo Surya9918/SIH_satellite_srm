@@ -73,7 +73,7 @@ export const ScanBeam: React.FC<ScanBeamProps> = ({ satellitePosition }) => {
     if (footprintRef.current) {
       // Pulsing footprint
       const mat = footprintRef.current.material as THREE.MeshBasicMaterial;
-      mat.opacity = 0.12 + Math.sin(time * 0.8) * 0.04;
+      mat.opacity = 0.35 + Math.sin(time * 0.8) * 0.15;
     }
 
     // ── CONCENTRIC RINGS ─────────────────────────────────────
@@ -82,94 +82,54 @@ export const ScanBeam: React.FC<ScanBeamProps> = ({ satellitePosition }) => {
       const p2 = ((time + 1.0) % 2.0) / 2.0;
 
       ring1Ref.current.scale.setScalar(1.0 + p1 * 3.5);
-      (ring1Ref.current.material as THREE.MeshBasicMaterial).opacity = 0.18 * (1 - p1);
+      (ring1Ref.current.material as THREE.MeshBasicMaterial).opacity = 0.4 * (1 - p1);
 
       ring2Ref.current.scale.setScalar(1.0 + p2 * 3.5);
-      (ring2Ref.current.material as THREE.MeshBasicMaterial).opacity = 0.12 * (1 - p2);
+      (ring2Ref.current.material as THREE.MeshBasicMaterial).opacity = 0.3 * (1 - p2);
     }
   });
 
   return (
     <group>
-      {/* ── SCAN CONE (satellite → Earth) ───────────────────── */}
+      {/* ── TORCH LIGHT (satellite → Earth) ───────────────────── */}
       <group ref={coneGroupRef}>
-        {/* Main cone: small tip at satellite, wide base at Earth */}
+        {/* Volumetric light cone */}
         <mesh ref={coneRef}>
-          {/* args: topRadius, bottomRadius, height, segments, open */}
-          <cylinderGeometry args={[0.006, 0.11, 1.0, 32, 1, true]} />
+          {/* args: topRadius, bottomRadius, height, radialSegments, heightSegments, openEnded */}
+          <cylinderGeometry args={[0.001, 0.15, 1.0, 64, 1, true]} />
           <meshBasicMaterial
-            color="#22d3ee"
+            color="#ffd700"
             transparent
-            opacity={0.1}
+            opacity={0.15}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
             side={THREE.DoubleSide}
-          />
-        </mesh>
-
-        {/* Edge lines of the cone — gives a precise angular look */}
-        <mesh>
-          <cylinderGeometry args={[0.006, 0.11, 1.0, 4, 1, true]} />
-          <meshBasicMaterial
-            color="#67e8f9"
-            transparent
-            opacity={0.35}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-            wireframe
           />
         </mesh>
       </group>
 
-      {/* ── FOOTPRINT (rectangular scanning quad on Earth) ───── */}
+      {/* ── FOOTPRINT (circular torch spotlight on Earth) ───── */}
       <group ref={footprintGroupRef}>
-        {/* Outer footprint rectangle */}
+        {/* Circular footprint */}
         <mesh ref={footprintRef} position={[0, 0.001, 0]}>
-          <planeGeometry args={[0.20, 0.14]} />
+          <circleGeometry args={[0.15, 64]} />
           <meshBasicMaterial
-            color="#0ea5e9"
+            color="#ffd700"
             transparent
-            opacity={0.14}
+            opacity={0.4}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
             side={THREE.DoubleSide}
           />
         </mesh>
-
-        {/* Footprint border lines */}
-        <mesh position={[0, 0.002, 0]}>
-          <planeGeometry args={[0.20, 0.14]} />
-          <meshBasicMaterial
-            color="#38bdf8"
-            transparent
-            opacity={0.5}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-            wireframe
-          />
-        </mesh>
-
-        {/* Inner scan-line grid (simulates pushbroom sensor rows) */}
-        {[-0.04, 0, 0.04].map((x, i) => (
-          <mesh key={i} position={[x, 0.002, 0]}>
-            <planeGeometry args={[0.002, 0.14]} />
-            <meshBasicMaterial
-              color="#67e8f9"
-              transparent
-              opacity={0.3}
-              blending={THREE.AdditiveBlending}
-              depthWrite={false}
-            />
-          </mesh>
-        ))}
 
         {/* Concentric expanding rings at footprint center */}
         <mesh ref={ring1Ref}>
           <ringGeometry args={[0.03, 0.036, 32]} />
           <meshBasicMaterial
-            color="#22d3ee"
+            color="#ffb700"
             transparent
-            opacity={0.18}
+            opacity={0.4}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
             side={THREE.DoubleSide}
@@ -178,9 +138,9 @@ export const ScanBeam: React.FC<ScanBeamProps> = ({ satellitePosition }) => {
         <mesh ref={ring2Ref}>
           <ringGeometry args={[0.05, 0.056, 32]} />
           <meshBasicMaterial
-            color="#0ea5e9"
+            color="#ffaa00"
             transparent
-            opacity={0.12}
+            opacity={0.3}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
             side={THREE.DoubleSide}
@@ -191,9 +151,9 @@ export const ScanBeam: React.FC<ScanBeamProps> = ({ satellitePosition }) => {
         <mesh position={[0, 0.003, 0]}>
           <circleGeometry args={[0.012, 16]} />
           <meshBasicMaterial
-            color="#38bdf8"
+            color="#ff8c00"
             transparent
-            opacity={0.4}
+            opacity={0.8}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
           />
