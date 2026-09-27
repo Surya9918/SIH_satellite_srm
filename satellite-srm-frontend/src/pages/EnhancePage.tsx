@@ -102,8 +102,7 @@ export const EnhancePage: React.FC = () => {
     setIsValidating(true);
 
     try {
-      const isMock = backendAvailable === false;
-      const result = await validateBandsApi(fourBands, isMock);
+      const result = await validateBandsApi(fourBands);
       if (result.valid) {
         setValidationResult(result);
         if (result.metadata?.common) {
@@ -157,7 +156,6 @@ export const EnhancePage: React.FC = () => {
     setStep('processing');
 
     try {
-      const isMock = backendAvailable === false;
       const resp = await startFourBandSuperResolution(
         {
           b02: fourBands.b02,
@@ -169,8 +167,7 @@ export const EnhancePage: React.FC = () => {
           model: settings.model,
           enableUncertainty: settings.enableUncertainty,
           scaleFactor: settings.scaleFactor,
-        },
-        isMock
+        }
       );
 
       const jobId = resp.job_id;
@@ -185,8 +182,7 @@ export const EnhancePage: React.FC = () => {
         await new Promise((res) => setTimeout(res, 1200));
 
         try {
-          const isMock = backendAvailable === false;
-          const updatedJob = await getJobStatus(jobId, isMock);
+          const updatedJob = await getJobStatus(jobId);
           consecutiveErrors = 0;
           setActiveJob(updatedJob);
           setSelectedJobId(updatedJob.jobId);

@@ -62,7 +62,7 @@ export const UploadPage: React.FC = () => {
         file: fileToUpload,
         model,
         enableUncertainty
-      }, isMockMode);
+      });
 
       if (response.job) {
         setActiveJob(response.job);

@@ -1,5 +1,4 @@
 import { apiClient } from './client';
-import { mockStartJob, mockValidateBandsApi } from './mockApi';
 import { ProcessingJob } from '../types/satellite';
 
 export interface StartReconstructionParams {
@@ -52,13 +51,8 @@ export async function startSingleSuperResolution(
 }
 
 export async function startSuperResolution(
-  params: StartReconstructionParams,
-  isMock = false
+  params: StartReconstructionParams
 ): Promise<SuperResolutionResponse> {
-  if (isMock) {
-    return mockStartJob(params as any);
-  }
-
   const primaryFile = params.file || (params.files && params.files[0]);
   if (!primaryFile) {
     throw new Error('No satellite image file provided for super-resolution.');
@@ -90,13 +84,8 @@ export async function checkBackendHealth(): Promise<boolean> {
 }
 
 export async function validateBandsApi(
-  bands: { b02?: File | null; b03?: File | null; b04?: File | null; b08?: File | null },
-  isMock = false
+  bands: { b02?: File | null; b03?: File | null; b04?: File | null; b08?: File | null }
 ): Promise<import('../types/satellite').FourBandValidationResult> {
-  if (isMock) {
-    return mockValidateBandsApi(bands);
-  }
-
   const formData = new FormData();
   if (bands.b02) formData.append('b02', bands.b02, bands.b02.name);
   if (bands.b03) formData.append('b03', bands.b03, bands.b03.name);
@@ -118,16 +107,8 @@ export async function startFourBandSuperResolution(
     model?: string;
     enableUncertainty?: boolean;
     scaleFactor?: number;
-  } = {},
-  isMock = false
+  } = {}
 ): Promise<SuperResolutionResponse> {
-  if (isMock) {
-    return mockStartJob({
-      files: [bands.b02, bands.b03, bands.b04, bands.b08],
-      ...options
-    } as any);
-  }
-
   const formData = new FormData();
   formData.append('b02', bands.b02, bands.b02.name);
   formData.append('b03', bands.b03, bands.b03.name);

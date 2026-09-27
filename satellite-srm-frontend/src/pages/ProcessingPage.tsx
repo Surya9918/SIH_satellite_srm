@@ -18,7 +18,7 @@ export const ProcessingPage: React.FC = () => {
 
     const poll = async () => {
       try {
-        const job = await getJobStatus(currentJobId, isMockMode);
+        const job = await getJobStatus(currentJobId);
         setActiveJob(job);
 
         if (job.status === 'completed') {
@@ -33,7 +33,7 @@ export const ProcessingPage: React.FC = () => {
     timer = setInterval(poll, 1000);
 
     return () => clearInterval(timer);
-  }, [currentJobId, isMockMode, setActiveJob]);
+  }, [currentJobId, setActiveJob]);
 
   const isCompleted = activeJob?.status === 'completed';
 
