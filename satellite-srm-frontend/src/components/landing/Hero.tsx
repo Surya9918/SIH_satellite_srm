@@ -1,6 +1,5 @@
 import React, { useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowRight, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { EarthScene, EarthVisualFallback } from './EarthScene';
 import { ErrorBoundary } from '../scene/ErrorBoundary';
 import gsap from 'gsap';

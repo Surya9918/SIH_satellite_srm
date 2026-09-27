@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Satellite, Menu, X, ChevronRight } from 'lucide-react';
-import { ThemeToggle } from '../theme/ThemeToggle';
 
 const NAV_LINKS = [
   { label: 'Home', to: '/' },
@@ -77,8 +76,6 @@ export const Navbar: React.FC = () => {
 
           {/* Right Actions */}
           <div className="hidden lg:flex items-center gap-1.5">
-            <ThemeToggle />
-            <div className="w-px h-4 bg-border mx-2" />
             <button
               onClick={() => navigate('/platform')}
               className="btn-primary text-[13px] py-2 px-4"
@@ -89,7 +86,6 @@ export const Navbar: React.FC = () => {
 
           {/* Mobile */}
           <div className="flex lg:hidden items-center gap-2">
-            <ThemeToggle />
             <button
               onClick={() => navigate('/platform')}
               className="btn-primary text-xs py-2 px-3"

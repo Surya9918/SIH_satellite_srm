@@ -121,7 +121,6 @@ const STATS = [
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const [heroLoaded, setHeroLoaded] = useState(false);
 
   return (
     <div className="min-h-screen glass-panel overflow-x-hidden">
@@ -129,12 +128,6 @@ export const HomePage: React.FC = () => {
       <section className="relative min-h-[90vh] flex items-center">
         {/* Background */}
         <div className="absolute inset-0 overflow-hidden">
-          <img
-            src="https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?w=1920&q=60&auto=format"
-            alt="Earth from space"
-            className={`w-full h-full object-cover transition-opacity duration-1000 ${heroLoaded ? 'opacity-30' : 'opacity-0'}`}
-            onLoad={() => setHeroLoaded(true)}
-          />
           <div className="absolute inset-0 bg-gradient-to-b from-srm-surface via-srm-base to-srm-elevated" />
           <div className="absolute inset-0 bg-gradient-to-r from-srm-surface via-transparent to-srm-elevated" />
         </div>

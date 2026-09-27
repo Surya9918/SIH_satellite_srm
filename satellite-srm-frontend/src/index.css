@@ -826,19 +826,7 @@ input[type='range']::-webkit-slider-thumb:hover {
   }
 }
 
-.bg-earth-decor {
-  background-image: url('/assets/terrars-earth-background.jpg');
-  background-repeat: no-repeat;
-  background-position: center bottom;
-  background-size: cover;
-  background-attachment: fixed;
-}
 
-/* Dark mode: solid deep-space background, no image required */
-.dark .bg-earth-decor {
-  background-image: none !important;
-  background-color: #061326 !important;
-}
 
 /* ─────────────────────────────────────────────────────────────
    PLATFORM PAGE DARK MODE — explicit panel & surface overrides

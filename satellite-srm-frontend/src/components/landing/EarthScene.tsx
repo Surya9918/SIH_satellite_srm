@@ -17,7 +17,7 @@ const IntroAnimation: React.FC<{ onFinished: () => void }> = ({ onFinished }) =>
   const { camera } = useThree();
 
   useFrame(() => {
-    // Zoom in deeper and smoother
+    // Zoom in smoother from a less extreme distance
     const targetPos = new THREE.Vector3(-0.8, 0.2, 2.8);
     camera.position.lerp(targetPos, 0.015);
     camera.lookAt(0, 0, 0);
@@ -126,7 +126,7 @@ export const EarthScene: React.FC<EarthSceneProps> = ({
       {/* ErrorBoundary wraps WebGL Canvas */}
       <ErrorBoundary fallback={<EarthVisualFallback />}>
         <Canvas
-          camera={{ position: [60, 30, 90], fov: 42 }}
+          camera={{ position: [8, 4, 12], fov: 42 }}
           gl={{
             antialias: true,
             alpha: true,
