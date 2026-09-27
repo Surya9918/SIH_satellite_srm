@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "gsap-react": {
+      "source": "greensock/gsap-skills",
+      "sourceType": "github",
+      "skillPath": "skills/gsap-react/SKILL.md",
+      "computedHash": "255206fb6a4a079ad73b4a12e7c63197dc451a8549c7ac4e852b50ff74ef3bd6"
+    },
+    "landing-page-design": {
+      "source": "101-skills/superpowers",
+      "sourceType": "github",
+      "skillPath": "guides/design/landing-page-design/SKILL.md",
+      "computedHash": "00c0bb9b3bf40a9865f51471c26724e140de40b8850a213378ab04d8e89679c9"
+    }
+  }
+}

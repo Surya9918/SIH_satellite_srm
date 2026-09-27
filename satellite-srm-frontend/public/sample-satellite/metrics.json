@@ -1,0 +1,48 @@
+{
+  "psnr_db": {
+    "bicubic": 28.85,
+    "model": 35.42,
+    "gain": 6.57,
+    "description": "Peak Signal-to-Noise Ratio (dB)",
+    "unit": "dB",
+    "higherIsBetter": true
+  },
+  "ssim": {
+    "bicubic": 0.785,
+    "model": 0.932,
+    "gain": 0.147,
+    "description": "Structural Similarity Index",
+    "higherIsBetter": true
+  },
+  "sam_deg": {
+    "bicubic": 4.62,
+    "model": 1.74,
+    "gain": -2.88,
+    "description": "Spectral Angle Mapper",
+    "unit": "deg",
+    "higherIsBetter": false
+  },
+  "ergas": {
+    "bicubic": 4.18,
+    "model": 1.45,
+    "gain": -2.73,
+    "description": "ERGAS Index",
+    "higherIsBetter": false
+  },
+  "ndvi_correlation": {
+    "bicubic": 0.884,
+    "model": 0.976,
+    "gain": 0.092,
+    "description": "NDVI Pearson Correlation",
+    "higherIsBetter": true
+  },
+  "ndvi_mae": {
+    "bicubic": 0.068,
+    "model": 0.016,
+    "gain": -0.052,
+    "description": "NDVI Mean Absolute Error",
+    "higherIsBetter": false
+  },
+  "scale_factor": 3.0,
+  "hasReferenceData": true
+}
