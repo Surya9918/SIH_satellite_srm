@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend-main/Satellite_SRM_DL"
+    schedule:
+      interval: "weekly"
+  
+  - package-ecosystem: "npm"
+    directory: "/satellite-srm-frontend"
+    schedule:
+      interval: "weekly"
+  
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
