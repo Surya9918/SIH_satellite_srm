@@ -19,12 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python3.11 -m pip install --upgrade pip && \
+    python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN pip install --no-cache-dir -e .
+RUN python3.11 -m pip install --no-cache-dir -e .
 
 EXPOSE 8501
 
-ENTRYPOINT ["python3", "-m", "satellite_srm.cli"]
+ENTRYPOINT ["python3.11", "-m", "satellite_srm.cli"]
 CMD ["app"]
