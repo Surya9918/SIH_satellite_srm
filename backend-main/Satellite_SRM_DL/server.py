@@ -733,8 +733,9 @@ async def process_satellite_srm_task(job_id: str, input_path: str, model_name: s
 
         elapsed = int(time.time() - start_time)
 
-        # Process the raster dynamically
-        product = generate_product_for_raster(input_path, job_id, scale_factor=3.0)
+        # Process the raster dynamically in a threadpool to prevent blocking the event loop
+        from fastapi.concurrency import run_in_threadpool
+        product = await run_in_threadpool(generate_product_for_raster, input_path, job_id, 3.0)
 
         if product:
             job["outputs"] = {
