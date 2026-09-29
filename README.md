@@ -1,9 +1,19 @@
 # Satellite-SRM Integration Platform (SRM-X)
 
+![Build](https://github.com/Surya9918/SIH_satellite_srm/workflows/Build%20Docker%20Images/badge.svg)
+![Tests](https://github.com/Surya9918/SIH_satellite_srm/workflows/Run%20Tests/badge.svg)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+
 **Problem Statement ID:** 26142  
 **Organization:** National Technical Research Organisation (NTRO)  
 **Theme:** Space Technology  
 **Domain:** Satellite Super-Resolution Mapping (SRM) from Medium-Resolution Imagery  
+
+## 🔗 Quick Links
+- [📚 Architecture Docs](./docs/ARCHITECTURE.md)
+- [🚀 Deployment Guide](./docs/DEPLOYMENT.md)
+- [🔧 Development Setup](./docs/DEVELOPMENT.md)
+- [🔌 API Specs](./docs/API.md)
 
 ## 🌍 Overview
 

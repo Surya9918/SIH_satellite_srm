@@ -1,0 +1,25 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build Backend Image
+      run: |
+        cd backend-main/Satellite_SRM_DL
+        docker build -t satellite-srm-backend:latest .
+        
+    - name: Build Frontend Image (if Dockerfile exists)
+      run: |
+        cd satellite-srm-frontend
+        if [ -f Dockerfile ]; then
+          docker build -t satellite-srm-frontend:latest .
+        else
+          echo "No Dockerfile found in frontend."
+        fi
