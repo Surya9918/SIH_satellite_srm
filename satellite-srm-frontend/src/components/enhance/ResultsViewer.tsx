@@ -157,10 +157,10 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({
                 </div>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <MetricCard label="L1 Loss" value={metrics?.l1_loss?.model?.toFixed(4) || 'N/A'} size="sm" color="cyan" />
-                  <MetricCard label="Perceptual Loss" value={metrics?.perceptual_loss?.model?.toFixed(4) || 'N/A'} size="sm" color="violet" />
-                  <MetricCard label="Spectral Loss" value={metrics?.spectral_loss?.model?.toFixed(4) || 'N/A'} size="sm" color="blue" />
-                  <MetricCard label="NDVI Loss" value={metrics?.ndvi_loss?.model?.toFixed(4) || 'N/A'} size="sm" color="emerald" />
+                  <MetricCard label="PSNR" subLabel="Peak signal-to-noise ratio" value={metrics?.psnr_db?.model?.toFixed(2) || 'N/A'} size="sm" color="cyan" />
+                  <MetricCard label="SSIM" subLabel="Structural similarity" value={metrics?.ssim?.model?.toFixed(4) || 'N/A'} size="sm" color="violet" />
+                  <MetricCard label="NDVI Correlation" subLabel="Vegetation index fidelity" value={metrics?.ndvi_correlation?.model?.toFixed(4) || 'N/A'} size="sm" color="emerald" />
+                  <MetricCard label="ERGAS" subLabel="Relative global synthesis error" value={metrics?.ergas?.model?.toFixed(4) || 'N/A'} size="sm" color="blue" />
                 </div>
               </div>
 
@@ -226,6 +226,8 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({
                    afterUrl={lrUrl}
                    beforeLabel={`SRM Enhanced · <${meta?.targetResolution?.toFixed(1) || '3.3'}m`}
                    afterLabel={`Sentinel-2 · ${meta?.nativeResolution?.toFixed(0) || '10'}m`}
+                   ndviUrl={resolveApiUrl(outputs?.ndviPreviewUrl)}
+                   uncertaintyUrl={uncertaintyUrl}
                    height="600px"
                    initialPosition={50}
                  />
@@ -263,7 +265,8 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({
                      crossOrigin="anonymous"
                      onMouseMove={(e) => handleMouseMove(e, imgRefCompare)}
                      onMouseLeave={handleMouseLeave}
-                     className="w-full h-full object-cover mix-blend-screen opacity-90 cursor-crosshair" 
+                     className="w-full h-full object-cover cursor-crosshair opacity-95"
+                     style={{ filter: 'brightness(1.2) contrast(1.45) saturate(1.5)' }}
                    />
                    <div className="absolute top-4 left-4 px-3 py-1.5 bg-background/80 backdrop-blur-md border border-border/50 rounded-lg text-foreground text-xs font-mono font-bold shadow-lg">
                      AI Reconstruction & Uncertainty Map
@@ -311,35 +314,35 @@ export const ResultsViewer: React.FC<ResultsViewerProps> = ({
 
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-4 bg-card p-6 rounded-2xl border border-border/50 shadow-sm">
-                <h3 className="text-lg font-bold text-foreground">Reconstruction Losses</h3>
+                <h3 className="text-lg font-bold text-foreground">Quality Metrics</h3>
                 <div className="space-y-5">
                   <div className="p-3 bg-muted/30 rounded-xl border border-border/50">
                     <h4 className="font-bold text-cyan-500 flex justify-between items-center">
-                      <span>L1 Loss</span>
-                      <span className="text-foreground">{metrics?.l1_loss?.model?.toFixed(4) || 'N/A'}</span>
+                      <span>PSNR</span>
+                      <span className="text-foreground">{metrics?.psnr_db?.model?.toFixed(2) || 'N/A'} dB</span>
                     </h4>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Measures the absolute difference between reconstructed and reference pixel values. Lower values indicate smaller pixel-level reconstruction error.</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Peak Signal-to-Noise Ratio. Measures pixel-level reconstruction quality. Higher is better.</p>
                   </div>
                   <div className="p-3 bg-muted/30 rounded-xl border border-border/50">
                     <h4 className="font-bold text-violet-500 flex justify-between items-center">
-                      <span>Perceptual Loss</span>
-                      <span className="text-foreground">{metrics?.perceptual_loss?.model?.toFixed(4) || 'N/A'}</span>
+                      <span>SSIM</span>
+                      <span className="text-foreground">{metrics?.ssim?.model?.toFixed(4) || 'N/A'}</span>
                     </h4>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Evaluates higher-level visual and feature similarity, beyond raw pixel values. Lower perceptual loss means the reconstructed imagery correctly captures textures and patterns like roads or buildings.</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Structural Similarity Index. Evaluates human-perceived structural similarity. Higher is better.</p>
                   </div>
                   <div className="p-3 bg-muted/30 rounded-xl border border-border/50">
                     <h4 className="font-bold text-blue-500 flex justify-between items-center">
-                      <span>Spectral Loss</span>
-                      <span className="text-foreground">{metrics?.spectral_loss?.model?.toFixed(4) || 'N/A'}</span>
+                      <span>NDVI Correlation</span>
+                      <span className="text-foreground">{metrics?.ndvi_correlation?.model?.toFixed(4) || 'N/A'}</span>
                     </h4>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Measures the preservation of spectral relationships across bands (e.g., RGB to NIR). Lower spectral loss indicates that the radiometry remains faithful, critical for downstream classification.</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Pearson correlation of the NDVI vegetation index. Higher is better.</p>
                   </div>
                   <div className="p-3 bg-muted/30 rounded-xl border border-border/50">
                     <h4 className="font-bold text-emerald-500 flex justify-between items-center">
-                      <span>NDVI Loss</span>
-                      <span className="text-foreground">{metrics?.ndvi_loss?.model?.toFixed(4) || 'N/A'}</span>
+                      <span>ERGAS</span>
+                      <span className="text-foreground">{metrics?.ergas?.model?.toFixed(4) || 'N/A'}</span>
                     </h4>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Measures preservation of vegetation-related information. Lower NDVI loss means vegetation mapping tasks will still function accurately after AI enhancement.</p>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Relative Global Error in Synthesis. Combines radiometric and spatial distortion. Lower is better.</p>
                   </div>
                 </div>
               </div>

@@ -38,6 +38,54 @@ def read_geotiff(filepath: str) -> GeoRaster:
             )
             return GeoRaster(data, meta)
 
+    # Try tifffile before PIL
+    try:
+        import tifffile
+        arr = tifffile.imread(filepath)
+        if arr.ndim == 3:
+            if arr.shape[2] < arr.shape[0] and arr.shape[2] < arr.shape[1]:
+                data = np.transpose(arr, (2, 0, 1))
+            else:
+                data = arr
+        elif arr.ndim == 2:
+            data = arr[np.newaxis, ...]
+        else:
+            data = arr
+            
+        sidecar_path = filepath + ".meta.json"
+        if os.path.exists(sidecar_path):
+            with open(sidecar_path, "r") as f:
+                sdata = json.load(f)
+            t_list = sdata["transform"]
+            t = Affine(*t_list)
+            crs = CRS.from_string(sdata["crs"])
+            band_names = sdata.get("band_names", ["B02", "B03", "B04", "B08"][:data.shape[0]])
+            nodata = sdata.get("nodata", None)
+            gsd_x = sdata.get("gsd_x", abs(t.a))
+            gsd_y = sdata.get("gsd_y", abs(t.e))
+        else:
+            t = Affine(10.0, 0.0, 500000.0, 0.0, -10.0, 2000000.0)
+            crs = CRS.from_epsg(32644)
+            band_names = ["B02", "B03", "B04", "B08"][:data.shape[0]]
+            nodata = None
+            gsd_x, gsd_y = 10.0, 10.0
+
+        meta = GeoMetadata(
+            width=data.shape[2],
+            height=data.shape[1],
+            count=data.shape[0],
+            crs=crs,
+            transform=t,
+            dtype=str(data.dtype),
+            nodata=nodata,
+            band_names=band_names,
+            gsd_x=gsd_x,
+            gsd_y=gsd_y
+        )
+        return GeoRaster(data, meta)
+    except Exception:
+        pass
+
     # Fallback using PIL / TIFF tags and JSON sidecar
     with Image.open(filepath) as img:
         frames = []

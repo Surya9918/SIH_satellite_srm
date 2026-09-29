@@ -40,17 +40,12 @@ export const SatelliteComparison: React.FC<SatelliteComparisonProps> = ({
   bounds,
   center,
 }) => {
-  // Normalize orientation: Ensure Original (10m / LR) is on Left and Super-Resolved (SR) is on Right
-  const isBeforeEnhanced =
-    beforeUrl.includes('sr') ||
-    beforeLabel.toLowerCase().includes('enhanced') ||
-    beforeLabel.toLowerCase().includes('srm') ||
-    beforeLabel.toLowerCase().includes('super');
-
-  const finalOriginalUrl = isBeforeEnhanced ? afterUrl : beforeUrl;
-  const finalSuperResolvedUrl = isBeforeEnhanced ? beforeUrl : afterUrl;
-  const finalOriginalLabel = isBeforeEnhanced ? afterLabel : beforeLabel;
-  const finalSuperResolvedLabel = isBeforeEnhanced ? beforeLabel : afterLabel;
+  // Keep the slider semantics explicit: the original/low-resolution image stays behind,
+  // while the super-resolved result is revealed over it according to the handle position.
+  const finalOriginalUrl = afterLabel.toLowerCase().includes('original') || afterLabel.toLowerCase().includes('sentinel') ? afterUrl : beforeUrl;
+  const finalSuperResolvedUrl = beforeLabel.toLowerCase().includes('enhanced') || beforeLabel.toLowerCase().includes('srm') || beforeLabel.toLowerCase().includes('super') ? beforeUrl : afterUrl;
+  const finalOriginalLabel = afterLabel.toLowerCase().includes('original') || afterLabel.toLowerCase().includes('sentinel') ? afterLabel : beforeLabel;
+  const finalSuperResolvedLabel = beforeLabel.toLowerCase().includes('enhanced') || beforeLabel.toLowerCase().includes('srm') || beforeLabel.toLowerCase().includes('super') ? beforeLabel : afterLabel;
 
   return (
     <InteractiveComparisonViewer

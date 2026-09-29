@@ -60,14 +60,15 @@ const RasterAnalysisPlane: React.FC<{
         />
       </mesh>
 
-      {/* 2. Real Uncertainty Heatmap Overlay (Only displayed if real uncertainty is available) */}
-      {isUncertaintyAvailable && uncMap && (
+      {/* 2. Real Uncertainty Heatmap Overlay (or a visible fallback when the real preview is not ready) */}
+      {isUncertaintyAvailable && (
         <mesh position={[0, 0, 0.005]}>
           <planeGeometry args={[2.3, 2.3]} />
           <meshBasicMaterial
-            map={uncMap}
+            map={uncMap ?? undefined}
+            color={uncMap ? '#ffffff' : '#8b5cf6'}
             transparent
-            opacity={0.65}
+            opacity={uncMap ? 0.65 : 0.28}
             blending={THREE.AdditiveBlending}
           />
         </mesh>

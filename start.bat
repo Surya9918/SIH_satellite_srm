@@ -16,7 +16,7 @@ xcopy /E /I /Y satellite-srm-frontend\dist backend-main\Satellite_SRM_DL\dist
 
 echo Starting Backend Server...
 cd backend-main\Satellite_SRM_DL
-start cmd /k "uvicorn server:app --host 0.0.0.0 --port 8000"
+start cmd /k "python -m uvicorn server:app --host 0.0.0.0 --port 8000"
 
 echo.
 echo ========================================================

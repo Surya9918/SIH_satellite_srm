@@ -22,33 +22,43 @@ interface UncertaintyAnalysisViewerProps {
 const Uncertainty2DFallback: React.FC<{
   isAvailable: boolean;
   uncertaintyPreviewUrl?: string;
-}> = ({ isAvailable, uncertaintyPreviewUrl }) => (
-  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-r from-srm-surface via-srm-base to-srm-elevated">
-    <div className="flex items-center gap-2 mb-3 text-xs font-mono text-purple-400">
-      <Activity size={16} className="animate-pulse" />
-      <span>Analyzing Prediction Uncertainty (2D Fallback)</span>
-    </div>
-    {isAvailable ? (
-      <div className="flex flex-col items-center gap-2">
-        <div className="w-28 h-28 rounded-xl overflow-hidden border border-purple-500/40 relative shadow-[0_0_20px_rgba(168,85,247,0.2)]">
-          <img
-            src={uncertaintyPreviewUrl || '/sample-satellite/uncertainty.png'}
-            alt="Uncertainty Map"
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-purple-950/60 to-transparent" />
+}> = ({ isAvailable, uncertaintyPreviewUrl }) => {
+  const [imageFailed, setImageFailed] = React.useState(false);
+  const imageSrc = uncertaintyPreviewUrl || '/sample-satellite/uncertainty.png';
+
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center select-none bg-gradient-to-r from-srm-surface via-srm-base to-srm-elevated">
+      <div className="flex items-center gap-2 mb-3 text-xs font-mono text-purple-400">
+        <Activity size={16} className="animate-pulse" />
+        <span>Analyzing Prediction Uncertainty (2D Fallback)</span>
+      </div>
+      {isAvailable ? (
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-28 h-28 rounded-xl overflow-hidden border border-purple-500/40 relative shadow-[0_0_20px_rgba(168,85,247,0.2)] bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.45),_rgba(15,23,42,0.9)_60%)]">
+            {!imageFailed ? (
+              <img
+                src={imageSrc}
+                alt="Uncertainty Map"
+                className="w-full h-full object-cover"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(217,70,239,0.8),rgba(59,130,246,0.3)_35%,rgba(15,23,42,0.95)_70%)]" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-purple-950/60 to-transparent" />
+          </div>
+          <span className="text-[11px] font-mono text-purple-300">
+            {imageFailed ? 'Preview not ready — uncertainty heatmap is still computing' : 'Monte Carlo Dropout Predictive Variance Active'}
+          </span>
         </div>
-        <span className="text-[11px] font-mono text-purple-300">
-          Monte Carlo Dropout Predictive Variance Active
-        </span>
-      </div>
-    ) : (
-      <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-700 text-xs font-mono">
-        Uncertainty analysis unavailable for this run.
-      </div>
-    )}
-  </div>
-);
+      ) : (
+        <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-700 text-xs font-mono">
+          Uncertainty analysis unavailable for this run.
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const UncertaintyAnalysisViewer: React.FC<UncertaintyAnalysisViewerProps> = ({
   progress = 50,

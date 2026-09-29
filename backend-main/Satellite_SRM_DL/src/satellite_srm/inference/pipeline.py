@@ -31,7 +31,7 @@ class FullSceneSRMPipeline:
         self.blending_method = i_cfg.get("blending_method", "weighted_hann")
         self.device = torch.device(select_device(str(self.config.get("device", "auto"))))
         self.model = self.model.to(self.device)
-        self.normalizer = RadiometricNormalizer()
+        self.normalizer = RadiometricNormalizer(use_percentiles=True, p_min=1.0, p_max=99.0)
         self.tile_extractor = TileExtractor(tile_size=self.tile_size, overlap=self.overlap)
         self.uncertainty_estimator = MonteCarloUncertaintyEstimator(self.model, mc_passes=self.mc_passes)
 
@@ -76,12 +76,9 @@ class FullSceneSRMPipeline:
             unc_blender.add_tile(target_row, target_col, tile_unc)
 
         sr_image = sr_blender.finalize()
-        # OUTPUT NORMALIZATION FIX (2026-09-23):
-        # SwinIR outputs are unconstrained floats (observed: [-8.72, +22.01]).
-        # The normalizer clips INPUT to [0,1] reflectance; we must clamp OUTPUT
-        # back to the same physical range before writing to disk.
-        # Without this, SpectralIndices (NDVI, NDWI) produce physically meaningless results.
-        sr_image = np.clip(sr_image, 0.0, 1.0)
+        # The model was trained on per-band percentile-normalized reflectance.
+        # Clamp in that model domain, then restore physical reflectance for GIS output.
+        sr_image = self.normalizer.unnormalize(np.clip(sr_image, 0.0, 1.0))
 
         unc_image = unc_blender.finalize()
 

@@ -22,6 +22,8 @@ export const AnalysisPage: React.FC = () => {
   const meta = job.metadata;
 
   const [activeTab, setActiveTab] = useState<'quality' | 'landcover' | 'uncertainty'>('quality');
+  const metricStatus = metrics?.status ?? 'ready';
+  const metricMessage = metrics?.message || 'Metrics ready.';
   const [showHeatmap, setShowHeatmap] = useState<boolean>(true);
   const [hoverData, setHoverData] = useState<{
     x: number; y: number; width: number; height: number;
@@ -124,20 +126,31 @@ export const AnalysisPage: React.FC = () => {
         {/* ── QUALITY TAB ── */}
         {activeTab === 'quality' && (
           <div className="anim-fade-in space-y-6">
-            {/* Primary Loss Metrics */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { key: 'l1', title: 'L1 Loss', desc: 'Pixel-level reconstruction error', val: metrics.l1_loss?.model?.toFixed(4) || '0.0210', color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-500/5 border-cyan-500/15' },
-                { key: 'perceptual', title: 'Perceptual Loss', desc: 'Feature similarity (VGG)', val: metrics.perceptual_loss?.model?.toFixed(4) || '0.0820', color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-500/5 border-violet-500/15' },
-                { key: 'spectral', title: 'Spectral Loss', desc: 'Spectral fidelity preservation', val: metrics.spectral_loss?.model?.toFixed(4) || '0.0350', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/5 border-blue-500/15' },
-                { key: 'ndvi', title: 'NDVI Loss', desc: 'Vegetation index consistency', val: metrics.ndvi_loss?.model?.toFixed(4) || '0.0150', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/5 border-emerald-500/15' }
-              ].map((m) => (
-                <div key={m.key} className={`rounded-xl p-4 border ${m.bg}`}>
-                  <h4 className={`text-sm font-bold mb-1 ${m.color}`}>{m.title}</h4>
-                  <p className="text-[10px] text-secondary mb-3 leading-tight">{m.desc}</p>
-                  <div className={`text-2xl font-black ${m.color} font-mono`}>{m.val}</div>
+            <div className="rounded-2xl border border-slate-900/10 dark:border-white/15 bg-white/75 dark:bg-slate-950/65 p-4">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-secondary mb-3">Image Quality Metrics</h3>
+              {metricStatus === 'calculating' ? (
+                <div className="rounded-xl border border-dashed border-cyan-400/60 bg-cyan-500/5 p-4 text-sm text-cyan-700 dark:text-cyan-300">
+                  Calculating metrics...
                 </div>
-              ))}
+              ) : (
+                <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                  {[
+                    { key: 'psnr', title: 'PSNR', desc: 'Peak signal-to-noise ratio; higher is better', val: metrics.psnr_db?.model?.toFixed(2) || 'N/A', unit: ' dB', color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-500/5 border-cyan-500/15' },
+                    { key: 'ssim', title: 'SSIM', desc: 'Structural similarity; higher is better', val: metrics.ssim?.model?.toFixed(4) || 'N/A', unit: '', color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-500/5 border-violet-500/15' },
+                    { key: 'ndvi-correlation', title: 'NDVI Correlation', desc: 'Vegetation index fidelity; higher is better', val: metrics.ndvi_correlation?.model?.toFixed(4) || 'N/A', unit: '', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/5 border-emerald-500/15' },
+                    { key: 'ergas', title: 'ERGAS', desc: 'Relative global synthesis error; lower is better', val: metrics.ergas?.model?.toFixed(4) || 'N/A', unit: '', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/5 border-blue-500/15' }
+                  ].map((m) => (
+                    <div key={m.key} className={`rounded-xl p-4 border ${m.bg}`}>
+                      <h4 className={`text-sm font-bold mb-1 ${m.color}`}>{m.title}</h4>
+                      <p className="text-[10px] text-secondary mb-3 leading-tight">{m.desc}</p>
+                      <div className={`text-2xl font-black ${m.color} font-mono`}>{m.val}{m.unit}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {metricStatus !== 'calculating' && metricMessage && (
+                <div className="mt-3 text-[11px] text-secondary">{metricMessage}</div>
+              )}
             </div>
 
             {/* NDVI comparison image */}
@@ -152,7 +165,7 @@ export const AnalysisPage: React.FC = () => {
               </div>
               <p className="text-xs text-secondary mt-3 flex items-center gap-2">
                 <Info size={14} className="text-emerald-500 shrink-0" />
-                NDVI Mean Absolute Error: {(metrics.ndvi_mae?.model || 0.0160).toFixed(4)} — validates strictly preserved radiometric vegetation indicators
+                NDVI Pearson correlation: {metrics.ndvi_correlation?.model?.toFixed(4) ?? 'N/A'} — higher values indicate stronger vegetation-index agreement
               </p>
             </div>
           </div>

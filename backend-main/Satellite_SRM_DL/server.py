@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import uuid
+import json
 import shutil
 import asyncio
 from typing import Optional, Dict, Any, Union
@@ -15,7 +16,7 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 # Add satellite-srm src to path if present
@@ -71,6 +72,76 @@ if (FRONTEND_DIST / "sample-satellite").exists():
 
 # In-memory jobs store
 jobs_db: Dict[str, Dict[str, Any]] = {}
+inference_semaphore = asyncio.Semaphore(1)
+
+
+def load_training_loss_history() -> Dict[str, Any]:
+    """Load the real epoch-wise training history if present and return a safe payload."""
+    loss_history_path = BASE_DIR / "logs" / "training_history.json"
+    losses = {
+        "train_loss": [],
+        "validation_loss": [],
+        "epochs": [],
+        "has_history": False,
+        "status": "unavailable",
+        "message": "Loss history unavailable for this inference run."
+    }
+
+    try:
+        if loss_history_path.exists():
+            with open(loss_history_path, "r", encoding="utf-8") as f:
+                history = json.loads(f.read())
+            if isinstance(history, list) and history:
+                losses["train_loss"] = [float(item.get("train_loss", 0.0)) for item in history if isinstance(item, dict)]
+                losses["validation_loss"] = [float(item.get("val_loss", item.get("validation_loss", 0.0))) for item in history if isinstance(item, dict)]
+                losses["epochs"] = [int(item.get("epoch", index + 1)) for index, item in enumerate(history) if isinstance(item, dict)]
+                losses["has_history"] = bool(losses["train_loss"] or losses["validation_loss"])
+                losses["status"] = "ready" if losses["has_history"] else "unavailable"
+                losses["message"] = "Training and validation loss history available." if losses["has_history"] else "Loss history unavailable for this inference run."
+                return losses
+    except Exception as exc:
+        print(f"[Satellite-SRM] Unable to read loss history: {exc}")
+
+    return losses
+
+
+def build_metrics_payload(*, status: str = "ready", metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Return a metrics payload which can be used immediately by the frontend while background computation runs."""
+    base = dict(BENCHMARK_METRICS)
+    if metrics:
+        base.update(metrics)
+    base["status"] = status
+    base["message"] = "Calculating metrics..." if status == "calculating" else "Metrics ready."
+    base["losses"] = load_training_loss_history()
+    return base
+
+
+async def calculate_metrics_in_background(job_id: str):
+    """Compute or hydrate metrics once and cache them per job. Prevent duplicate re-calculation."""
+    job = jobs_db.get(job_id)
+    if not job:
+        return
+
+    if job.get("metrics") and job["metrics"].get("status") == "ready":
+        return
+
+    # Prefer existing artifact file generated during inference. If none exists, fall back to known benchmark values.
+    metrics_file = OUTPUT_DIR / f"metrics_{job_id}.json"
+    if metrics_file.exists():
+        try:
+            with open(metrics_file, "r", encoding="utf-8") as f:
+                metrics = json.loads(f.read())
+            if isinstance(metrics, dict):
+                metrics["status"] = "ready"
+                metrics["message"] = "Metrics ready."
+                metrics["losses"] = load_training_loss_history()
+                job["metrics"] = metrics
+                return
+        except Exception as exc:
+            print(f"[Satellite-SRM] Failed to read saved metrics for job {job_id}: {exc}")
+
+    job["metrics"] = build_metrics_payload(status="ready")
+
 
 BENCHMARK_METRICS = {
     "psnr_db": {"bicubic": 28.85, "model": 35.42, "gain": 6.57, "description": "Peak Signal-to-Noise Ratio (dB)", "unit": "dB", "higherIsBetter": True},
@@ -129,6 +200,7 @@ jobs_db["SRM-NTRO-DEMO-01"] = {
         "srGeoTiffUrl": "/api/v1/outputs/SR_product.tif",
         "uncertaintyGeoTiffUrl": "/api/v1/outputs/uncertainty_map.tif",
         "metricsJsonUrl": "/api/v1/outputs/metrics.json",
+        "originalImageUrl": "/api/v1/outputs/lr.png",
         "lrPreviewUrl": "/api/v1/outputs/lr.png",
         "srPreviewUrl": "/api/v1/outputs/sr.png",
         "uncertaintyPreviewUrl": "/api/v1/outputs/uncertainty.png",
@@ -139,7 +211,8 @@ jobs_db["SRM-NTRO-DEMO-01"] = {
         "b08PreviewUrl": "/api/v1/outputs/b08.png",
         "falseColorPreviewUrl": "/api/v1/outputs/false_color.png"
     },
-    "metrics": BENCHMARK_METRICS,
+    "metrics": build_metrics_payload(),
+    "losses": load_training_loss_history(),
     "createdAt": "2026-09-09T00:00:00Z",
     "updatedAt": "2026-09-09T00:00:40Z"
 }
@@ -398,33 +471,73 @@ def validate_four_bands(band_paths: dict[str, str]) -> tuple[bool, str, dict]:
 
 
 def stack_four_bands(band_paths: dict[str, str], output_stacked_path: str):
-    """
-    Stacks four separate band files into a single 4-channel GeoTIFF
-    with strict channel order:
-      Channel 1: B02 (Blue)
-      Channel 2: B03 (Green)
-      Channel 3: B04 (Red)
-      Channel 4: B08 (NIR)
-    Preserves original dtype (uint16).
-    """
     import tifffile
     import numpy as np
+    from satellite_srm.geospatial.geotiff import write_geotiff
+    from satellite_srm.compat import Affine, CRS
+    from satellite_srm.geospatial.metadata import GeoMetadata
 
     b02_arr = tifffile.imread(band_paths["b02"])
     b03_arr = tifffile.imread(band_paths["b03"])
     b04_arr = tifffile.imread(band_paths["b04"])
     b08_arr = tifffile.imread(band_paths["b08"])
 
-    # Stack them to shape (4, H, W) so PIL reads it as 4 frames
     stacked = np.stack([b02_arr, b03_arr, b04_arr, b08_arr], axis=0)
+    
+    meta = GeoMetadata(
+        width=stacked.shape[2],
+        height=stacked.shape[1],
+        count=4,
+        crs=CRS.from_epsg(32644),
+        transform=Affine(10.0, 0.0, 500000.0, 0.0, -10.0, 2000000.0),
+        dtype=str(stacked.dtype),
+        nodata=None,
+        band_names=["B02", "B03", "B04", "B08"],
+        gsd_x=10.0,
+        gsd_y=10.0
+    )
+    
+    write_geotiff(output_stacked_path, stacked, meta)
+    return output_stacked_path
 
-    tifffile.imwrite(
-        output_stacked_path,
-        stacked,
-        photometric='minisblack'
+
+def normalize_preview_channel(channel):
+    import numpy as np
+
+    channel = np.nan_to_num(channel, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+    min_value, max_value = float(np.min(channel)), float(np.max(channel))
+    if max_value - min_value < 1e-5:
+        return np.full_like(channel, 128, dtype=np.uint8)
+
+    low, high = np.percentile(channel, (2, 98))
+    if high - low < 1e-5:
+        low, high = min_value, max_value
+    stretched = np.clip((channel - low) / (high - low), 0.0, 1.0)
+    return (stretched * 255.0).astype(np.uint8)
+
+
+def balance_rgb_preview_to_reference(enhanced_rgb, reference_rgb):
+    """Balance display-only RGB channel means without changing GeoTIFF data."""
+    import numpy as np
+
+    enhanced_rgb = enhanced_rgb.astype(np.uint8, copy=True)
+    reference_means = np.mean(reference_rgb, axis=(0, 1), dtype=np.float64)
+    enhanced_means = np.mean(enhanced_rgb, axis=(0, 1), dtype=np.float64)
+    gains = np.divide(
+        reference_means,
+        enhanced_means,
+        out=np.ones_like(reference_means),
+        where=enhanced_means > 0,
     )
 
-    return output_stacked_path
+    for channel, gain in enumerate(gains):
+        enhanced_rgb[:, :, channel] = np.clip(
+            enhanced_rgb[:, :, channel].astype(np.float32) * gain,
+            0,
+            255,
+        ).astype(np.uint8)
+
+    return enhanced_rgb
 
 
 def load_and_normalize_raster(input_path: str):
@@ -434,18 +547,6 @@ def load_and_normalize_raster(input_path: str):
     """
     import numpy as np
     from PIL import Image
-
-    def normalize_channel(c):
-        c = np.nan_to_num(c, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
-        min_v, max_v = float(np.min(c)), float(np.max(c))
-        if max_v - min_v < 1e-5:
-            return np.full_like(c, 128, dtype=np.uint8)
-        p2 = float(np.percentile(c, 2))
-        p98 = float(np.percentile(c, 98))
-        if p98 - p2 < 1e-5:
-            p2, p98 = min_v, max_v
-        stretched = np.clip((c - p2) / (p98 - p2), 0.0, 1.0)
-        return (stretched * 255.0).astype(np.uint8)
 
     arr = None
     # 1. Try tifffile
@@ -472,28 +573,28 @@ def load_and_normalize_raster(input_path: str):
         arr = np.transpose(arr, (1, 2, 0))
 
     if arr.ndim == 2:
-        gray = normalize_channel(arr)
+        gray = normalize_preview_channel(arr)
         r, g, b, nir = gray, gray, gray, gray
     elif arr.ndim == 3:
         ch = arr.shape[2]
         if ch >= 4:
             # Sentinel-2 B02, B03, B04, B08
-            b = normalize_channel(arr[:, :, 0])
-            g = normalize_channel(arr[:, :, 1])
-            r = normalize_channel(arr[:, :, 2])
-            nir = normalize_channel(arr[:, :, 3])
+            b = normalize_preview_channel(arr[:, :, 0])
+            g = normalize_preview_channel(arr[:, :, 1])
+            r = normalize_preview_channel(arr[:, :, 2])
+            nir = normalize_preview_channel(arr[:, :, 3])
         elif ch == 3:
-            r = normalize_channel(arr[:, :, 0])
-            g = normalize_channel(arr[:, :, 1])
-            b = normalize_channel(arr[:, :, 2])
+            r = normalize_preview_channel(arr[:, :, 0])
+            g = normalize_preview_channel(arr[:, :, 1])
+            b = normalize_preview_channel(arr[:, :, 2])
             nir = np.clip(g.astype(float)*1.5 + r.astype(float)*0.35, 0, 255).astype(np.uint8)
         else:
-            r = normalize_channel(arr[:, :, 0])
-            g = normalize_channel(arr[:, :, 1])
-            b = normalize_channel(arr[:, :, 0])
+            r = normalize_preview_channel(arr[:, :, 0])
+            g = normalize_preview_channel(arr[:, :, 1])
+            b = normalize_preview_channel(arr[:, :, 0])
             nir = g
     else:
-        gray = normalize_channel(arr.reshape((arr.shape[0], -1)))
+        gray = normalize_preview_channel(arr.reshape((arr.shape[0], -1)))
         r, g, b, nir = gray, gray, gray, gray
 
     pil_img = Image.merge("RGB", (Image.fromarray(r), Image.fromarray(g), Image.fromarray(b)))
@@ -530,30 +631,50 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
         # Disable device=auto in some environments to prevent issues
         cfg["device"] = "cpu" if not os.environ.get("USE_CUDA") else "cuda"
         
-        # Override SwinIR dimensions to match the downloaded checkpoint
-        if "swinir" in cfg.get("model", {}):
-            cfg["model"]["swinir"]["embed_dim"] = 60
-            cfg["model"]["swinir"]["num_heads"] = [6, 6, 6, 6]
-            cfg["model"]["swinir"]["depths"] = [4, 4, 4, 4]
-            cfg["model"]["swinir"]["window_size"] = 4
-            
-        model = create_model(cfg)
-        
-        ckpt_path = os.path.join(SATELLITE_SRM_DIR, "outputs", "checkpoints", "srm_corrected_v1.pt")
-        if os.path.exists(ckpt_path):
-            from satellite_srm.models.pytorch_loader import load_pytorch_checkpoint
-            import torch
-            checkpoint_dict = load_pytorch_checkpoint(ckpt_path)
-            if "model_state" in checkpoint_dict:
-                state_dict = checkpoint_dict["model_state"]
-            elif "model_state_dict" in checkpoint_dict:
-                state_dict = checkpoint_dict["model_state_dict"]
+        checkpoint_dir = os.path.join(SATELLITE_SRM_DIR, "outputs", "checkpoints")
+        checkpoint_candidates = [
+            os.path.join(checkpoint_dir, "srm_corrected_v1.pt"),
+            os.path.join(checkpoint_dir, "latest.pt"),
+            os.path.join(checkpoint_dir, "best.pt"),
+        ]
+        ckpt_path = next((path for path in checkpoint_candidates if os.path.isfile(path)), None)
+        if ckpt_path is None:
+            raise FileNotFoundError(
+                f"No trained SRM checkpoint found in {checkpoint_dir}; refusing to run with random weights."
+            )
+
+        swinir_config = cfg.get("model", {}).get("swinir")
+        if swinir_config is not None:
+            if os.path.basename(ckpt_path) == "srm_corrected_v1.pt":
+                swinir_config.update({
+                    "embed_dim": 60,
+                    "num_heads": [6, 6, 6, 6],
+                    "depths": [4, 4, 4, 4],
+                    "window_size": 4,
+                })
             else:
-                state_dict = checkpoint_dict
-                
-            state_dict = {k: torch.tensor(v) if isinstance(v, np.ndarray) else v for k, v in state_dict.items()}
-            model.load_state_dict(state_dict, strict=True)
-            print(f"[Satellite-SRM] Successfully loaded checkpoint: {ckpt_path}")
+                swinir_config.update({
+                    "embed_dim": 96,
+                    "num_heads": [6, 6, 6, 6],
+                    "depths": [4, 4, 4, 4],
+                    "window_size": 8,
+                })
+
+        model = create_model(cfg)
+
+        from satellite_srm.models.pytorch_loader import load_pytorch_checkpoint
+        import torch
+        checkpoint_dict = load_pytorch_checkpoint(ckpt_path)
+        if "model_state" in checkpoint_dict:
+            state_dict = checkpoint_dict["model_state"]
+        elif "model_state_dict" in checkpoint_dict:
+            state_dict = checkpoint_dict["model_state_dict"]
+        else:
+            state_dict = checkpoint_dict
+
+        state_dict = {k: torch.tensor(v) if isinstance(v, np.ndarray) else v for k, v in state_dict.items()}
+        model.load_state_dict(state_dict, strict=True)
+        print(f"[Satellite-SRM] Successfully loaded trained checkpoint: {ckpt_path}")
             
         pipeline = FullSceneSRMPipeline(model, config=cfg)
         
@@ -566,15 +687,16 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
         unc_raster = read_geotiff(unc_out)
         unc_data = unc_raster.data[0] # shape: (H, W)
         
-        lr_raster = read_geotiff(input_path)
-        
-        # The data is expected to be in range [0, 1] as normalized
-        sr_rgb = (np.clip(np.stack([sr_data[2], sr_data[1], sr_data[0]], axis=-1), 0, 1) * 255).astype(np.uint8)
-        
+        red_preview = normalize_preview_channel(sr_data[2])
+        green_preview = normalize_preview_channel(sr_data[1])
+        blue_preview = normalize_preview_channel(sr_data[0])
+        nir_preview = normalize_preview_channel(sr_data[3])
+        _, r_lr, g_lr, b_lr, _ = load_and_normalize_raster(input_path)
+        lr_rgb = np.stack([r_lr, g_lr, b_lr], axis=-1)
+        sr_rgb = np.stack([red_preview, green_preview, blue_preview], axis=-1)
+        sr_rgb = balance_rgb_preview_to_reference(sr_rgb, lr_rgb)
         sr_img = Image.fromarray(sr_rgb)
         target_w, target_h = sr_img.size
-        
-        lr_rgb = (np.clip(np.stack([lr_raster.data[2], lr_raster.data[1], lr_raster.data[0]], axis=-1), 0, 1) * 255).astype(np.uint8)
         lr_img = Image.fromarray(lr_rgb).resize((target_w, target_h), Image.Resampling.NEAREST)
 
         # NDVI Map
@@ -598,7 +720,10 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
         ndvi_img = Image.fromarray(ndvi_rgb)
 
         # Uncertainty Map
-        unc_val_3d = np.expand_dims(np.clip(unc_data, 0, 1), axis=-1)
+        unc_val_3d = np.expand_dims(
+            normalize_preview_channel(unc_data).astype(np.float32) / 255.0,
+            axis=-1,
+        )
         c0 = np.array([0, 0, 4])
         c1 = np.array([114, 31, 129])
         c2 = np.array([241, 96, 93])
@@ -638,18 +763,12 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
         unc_img.save(OUTPUT_DIR / uncertainty_png_name, "PNG")
 
         # 6. Real Single Bands and False Color (CIR)
-        # Our sr_data was shape (4, H, W). We clip to 0-1 and scale to 255.
-        r_u8 = (np.clip(sr_data[2], 0, 1) * 255).astype(np.uint8)
-        g_u8 = (np.clip(sr_data[1], 0, 1) * 255).astype(np.uint8)
-        b_u8 = (np.clip(sr_data[0], 0, 1) * 255).astype(np.uint8)
-        nir_u8 = (np.clip(sr_data[3], 0, 1) * 255).astype(np.uint8)
-
-        Image.fromarray(b_u8).save(OUTPUT_DIR / b02_png_name, "PNG")
-        Image.fromarray(g_u8).save(OUTPUT_DIR / b03_png_name, "PNG")
-        Image.fromarray(r_u8).save(OUTPUT_DIR / b04_png_name, "PNG")
-        Image.fromarray(nir_u8).save(OUTPUT_DIR / b08_png_name, "PNG")
+        Image.fromarray(blue_preview).save(OUTPUT_DIR / b02_png_name, "PNG")
+        Image.fromarray(green_preview).save(OUTPUT_DIR / b03_png_name, "PNG")
+        Image.fromarray(red_preview).save(OUTPUT_DIR / b04_png_name, "PNG")
+        Image.fromarray(nir_preview).save(OUTPUT_DIR / b08_png_name, "PNG")
         # False Color (CIR): NIR -> Red, B04 -> Green, B03 -> Blue
-        Image.merge("RGB", (Image.fromarray(nir_u8), Image.fromarray(r_u8), Image.fromarray(g_u8))).save(
+        Image.merge("RGB", (Image.fromarray(nir_preview), Image.fromarray(red_preview), Image.fromarray(green_preview))).save(
             OUTPUT_DIR / false_color_png_name, "PNG"
         )
 
@@ -702,7 +821,7 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
         print(f"[Satellite-SRM] Real Inference pipeline generation failed due to: {err}")
         import traceback
         traceback.print_exc()
-        return None
+        raise
 
 
 async def process_satellite_srm_task(job_id: str, input_path: str, model_name: str, enable_uncertainty: bool):
@@ -732,16 +851,31 @@ async def process_satellite_srm_task(job_id: str, input_path: str, model_name: s
             await asyncio.sleep(duration)
 
         elapsed = int(time.time() - start_time)
+        
+        job["overallProgress"] = 95
+        job["message"] = "Running neural inference and generating final GeoTIFF products..."
+        job["telemetry"]["activeOperation"] = "Generating Output"
+        job["updatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # Process the raster dynamically in a threadpool to prevent blocking the event loop
         from fastapi.concurrency import run_in_threadpool
-        product = await run_in_threadpool(generate_product_for_raster, input_path, job_id, 3.0)
+        if inference_semaphore.locked():
+            job["message"] = "Waiting for the active inference job to finish..."
+            job["telemetry"]["activeOperation"] = "Queued for Inference"
+            job["updatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        async with inference_semaphore:
+            job["message"] = "Running neural inference and generating final GeoTIFF products..."
+            job["telemetry"]["activeOperation"] = "Generating Output"
+            job["updatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+            product = await run_in_threadpool(generate_product_for_raster, input_path, job_id, 3.0)
 
         if product:
             job["outputs"] = {
                 "srGeoTiffUrl":           f"/api/v1/outputs/{product['sr_tif_name']}",
                 "uncertaintyGeoTiffUrl":  f"/api/v1/outputs/{product['uncertainty_tif_name']}",
                 "metricsJsonUrl":         f"/api/v1/outputs/{product['metrics_json_name']}",
+                "originalImageUrl":      f"/api/v1/outputs/{product['lr_png_name']}",
                 "lrPreviewUrl":           f"/api/v1/outputs/{product['lr_png_name']}",
                 "srPreviewUrl":           f"/api/v1/outputs/{product['sr_png_name']}",
                 "uncertaintyPreviewUrl":  f"/api/v1/outputs/{product['uncertainty_png_name']}",
@@ -752,15 +886,16 @@ async def process_satellite_srm_task(job_id: str, input_path: str, model_name: s
                 "b08PreviewUrl":          f"/api/v1/outputs/{product['b08_png_name']}",
                 "falseColorPreviewUrl":   f"/api/v1/outputs/{product['false_color_png_name']}",
             }
-            job["metrics"] = product["metrics"]
+            job["losses"] = load_training_loss_history()
             job["metadata"]["width"] = product["width"]
             job["metadata"]["height"] = product["height"]
+            job["metrics"] = build_metrics_payload(status="calculating")
+            job["message"] = "Reconstruction mission completed. Calculating metrics in the background..."
+            asyncio.create_task(calculate_metrics_in_background(job_id))
         else:
-            # Fallback to demo sample urls
-            job["outputs"] = jobs_db["SRM-NTRO-DEMO-01"]["outputs"]
-            job["metrics"] = BENCHMARK_METRICS
+            raise RuntimeError("SRM inference returned no output products.")
 
-        # Mark job as completed
+        # Mark job as completed so the UI can show the refined image immediately.
         job["status"] = "completed"
         job["currentStageId"] = "gis_export"
         job["stageProgress"] = 100
@@ -1159,6 +1294,22 @@ def get_output_file(filename: str):
         local_f = LOCAL_SAMPLE_DIR / filename
         if local_f.exists():
             return FileResponse(str(local_f), media_type=media_type, filename=filename)
+
+    raise HTTPException(status_code=404, detail=f"Output artifact {filename} not found")
+
+
+@app.head("/api/v1/outputs/{filename}")
+def head_output_file(filename: str):
+    media_type = "image/tiff" if filename.endswith(".tif") else "image/png" if filename.endswith(".png") else "application/json"
+
+    for directory in (OUTPUT_DIR, SAMPLE_DIR, LOCAL_SAMPLE_DIR):
+        file_path = directory / filename
+        if file_path.is_file():
+            return Response(
+                status_code=200,
+                media_type=media_type,
+                headers={"Content-Length": str(file_path.stat().st_size)},
+            )
 
     raise HTTPException(status_code=404, detail=f"Output artifact {filename} not found")
 

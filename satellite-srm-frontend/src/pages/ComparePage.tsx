@@ -26,13 +26,13 @@ export const ComparePage: React.FC = () => {
   const [mode, setMode] = useState<CompareMode>('slider');
   const [opacity, setOpacity] = useState(60);
 
-  const lrUrl = resolveApiUrl(job.outputs?.lrPreviewUrl) || '/sample-satellite/lr.png';
-  const srUrl = resolveApiUrl(job.outputs?.srPreviewUrl) || '/sample-satellite/sr.png';
+  const originalUrl = resolveApiUrl(job.outputs?.originalImageUrl || job.outputs?.lrPreviewUrl) || '/sample-satellite/lr.png';
+  const refinedUrl = resolveApiUrl(job.outputs?.srPreviewUrl) || '/sample-satellite/sr.png';
   const meta = job.metadata;
 
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = srUrl;
+    a.href = refinedUrl;
     a.download = `SRM_Enhanced_${meta?.filename || 'output'}.png`;
     a.click();
   };
@@ -110,10 +110,10 @@ export const ComparePage: React.FC = () => {
             {/* Comparison view */}
             {mode === 'slider' && (
               <SatelliteComparison
-                beforeUrl={srUrl}
-                afterUrl={lrUrl}
+                beforeUrl={refinedUrl}
+                afterUrl={originalUrl}
                 beforeLabel={`SRM Enhanced · <${meta?.targetResolution?.toFixed(1) || '3.3'}m`}
-                afterLabel={`Sentinel-2 · ${meta?.nativeResolution?.toFixed(0) || '10'}m`}
+                afterLabel={`Original · ${meta?.nativeResolution?.toFixed(0) || '10'}m`}
                 ndviUrl={resolveApiUrl(job.outputs?.ndviPreviewUrl)}
                 uncertaintyUrl={resolveApiUrl(job.outputs?.uncertaintyPreviewUrl)}
                 height="560px"
@@ -127,13 +127,13 @@ export const ComparePage: React.FC = () => {
             {mode === 'split' && (
               <div className="grid grid-cols-2 gap-4 rounded-2xl overflow-hidden shadow-2xl">
                 <div className="relative rounded-xl overflow-hidden border border-primary/50 shadow-[0_0_20px_hsl(var(--primary)/0.2)]">
-                  <img src={srUrl} alt="Enhanced" className="w-full object-cover" style={{ height: '600px' }} />
+                  <img src={refinedUrl} alt="Enhanced" className="w-full object-cover" style={{ height: '600px' }} />
                   <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-primary/20 backdrop-blur-md border border-primary/30 text-[11px] font-mono text-primary font-bold shadow-lg">
                     SRM Enhanced · &lt;{meta?.targetResolution?.toFixed(1) || '3.3'}m
                   </div>
                 </div>
                 <div className="relative rounded-xl overflow-hidden border border-border/50 glass-panel">
-                  <img src={lrUrl} alt="Original" className="w-full object-cover" style={{ height: '600px' }} />
+                  <img src={originalUrl} alt="Original" className="w-full object-cover" style={{ height: '600px' }} />
                   <div className="absolute top-4 left-4 px-3 py-1.5 rounded-lg glass-panel border border-border/50 text-[11px] font-mono text-muted-foreground shadow-lg">
                     Sentinel-2 · {meta?.nativeResolution?.toFixed(0) || '10'}m
                   </div>
@@ -143,9 +143,9 @@ export const ComparePage: React.FC = () => {
 
             {mode === 'opacity' && (
               <div className="relative rounded-2xl overflow-hidden border border-border/50 shadow-2xl" style={{ height: '600px' }}>
-                <img src={lrUrl} alt="Original" className="absolute inset-0 w-full h-full object-cover" />
+                <img src={originalUrl} alt="Original" className="absolute inset-0 w-full h-full object-cover" />
                 <img
-                  src={srUrl}
+                  src={refinedUrl}
                   alt="Enhanced"
                   className="absolute inset-0 w-full h-full object-cover transition-opacity duration-75"
                   style={{ opacity: opacity / 100 }}

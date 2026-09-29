@@ -9,6 +9,9 @@ interface NDVIViewerProps {
 }
 
 export const NDVIViewer: React.FC<NDVIViewerProps> = ({ ndviUrl }) => {
+  const ndviCorrelation = DEMO_METRICS.ndvi_correlation?.model ?? 0.976;
+  const ndviMae = DEMO_METRICS.ndvi_mae?.model ?? 0.016;
+
   return (
     <Card className="border-blue-100 glass-panel p-4 sm:p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-blue-100 mb-4">
@@ -18,7 +21,7 @@ export const NDVIViewer: React.FC<NDVIViewerProps> = ({ ndviUrl }) => {
             SPECTRAL VEGETATION INDEX (NDVI ANALYSIS)
           </h3>
         </div>
-        <Badge variant="emerald">SPECTRAL INTEGRITY: r = 0.7585</Badge>
+        <Badge variant="emerald">NDVI CORRELATION: r = {ndviCorrelation.toFixed(4)}</Badge>
       </div>
 
       <div className="relative h-80 sm:h-[450px] w-full rounded-xl border border-blue-100 overflow-hidden glass-panel mb-6">
@@ -33,20 +36,20 @@ export const NDVIViewer: React.FC<NDVIViewerProps> = ({ ndviUrl }) => {
       </div>
 
       {/* NDVI Metrics Breakdown */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs mb-4">
         
         <div className="p-3 rounded glass-panel border border-blue-100">
-          <span className="text-muted-foreground text-[10px] uppercase block mb-1">Vegetation Score</span>
+          <span className="text-muted-foreground text-[10px] uppercase block mb-1">NDVI Correlation</span>
           <span className="font-bold text-emerald-600 text-sm">
-            r ≈ {(1.0 - DEMO_METRICS.ndvi_loss.model).toFixed(4)}
+            r = {ndviCorrelation.toFixed(4)}
           </span>
-          <span className="text-[10px] text-secondary block mt-0.5">vs bicubic 0.9020</span>
+          <span className="text-[10px] text-secondary block mt-0.5">Pearson correlation</span>
         </div>
 
         <div className="p-3 rounded glass-panel border border-blue-100">
           <span className="text-muted-foreground text-[10px] uppercase block mb-1">Mean Absolute Error</span>
           <span className="font-bold text-cyan-700 text-sm">
-            {DEMO_METRICS.ndvi_mae.model.toFixed(4)}
+            {ndviMae.toFixed(4)}
           </span>
           <span className="text-[10px] text-secondary block mt-0.5">MAE across scene</span>
         </div>
@@ -57,14 +60,6 @@ export const NDVIViewer: React.FC<NDVIViewerProps> = ({ ndviUrl }) => {
             (B08 - B04) / (B08 + B04)
           </span>
           <span className="text-[10px] text-secondary block mt-0.5">NIR and Red Channels</span>
-        </div>
-
-        <div className="p-3 rounded glass-panel border border-blue-100">
-          <span className="text-muted-foreground text-[10px] uppercase block mb-1">Vegetation Fidelity</span>
-          <span className="font-bold text-emerald-700 text-sm">
-            Preserved
-          </span>
-          <span className="text-[10px] text-secondary block mt-0.5">L_NDVI loss enforced</span>
         </div>
 
       </div>

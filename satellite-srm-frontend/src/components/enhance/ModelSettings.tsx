@@ -128,20 +128,20 @@ const ModelPreviewOverlay: React.FC<{ modelId: string | null; onClose: () => voi
             <h3 className="text-xs font-bold uppercase tracking-widest text-secondary mb-3">Evaluation Metrics (Reported After Inference)</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3 bg-cyan-500/5 rounded-xl border border-cyan-500/15">
-                <div className="text-cyan-600 dark:text-cyan-400 font-bold text-sm mb-1">L1 Loss</div>
-                <div className="text-[10px] text-cyan-800/70 dark:text-cyan-300/70 leading-tight">Pixel-level reconstruction difference</div>
+                <div className="text-cyan-600 dark:text-cyan-400 font-bold text-sm mb-1">PSNR</div>
+                <div className="text-[10px] text-cyan-800/70 dark:text-cyan-300/70 leading-tight">Higher is better</div>
               </div>
               <div className="p-3 bg-violet-500/5 rounded-xl border border-violet-500/15">
-                <div className="text-violet-600 dark:text-violet-400 font-bold text-sm mb-1">Perceptual Loss</div>
-                <div className="text-[10px] text-violet-800/70 dark:text-violet-300/70 leading-tight">Feature/visual reconstruction similarity</div>
+                <div className="text-violet-600 dark:text-violet-400 font-bold text-sm mb-1">SSIM</div>
+                <div className="text-[10px] text-violet-800/70 dark:text-violet-300/70 leading-tight">Higher is better</div>
               </div>
               <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/15">
-                <div className="text-blue-600 dark:text-blue-400 font-bold text-sm mb-1">Spectral Loss</div>
-                <div className="text-[10px] text-blue-800/70 dark:text-blue-300/70 leading-tight">Spectral fidelity preservation</div>
+                <div className="text-blue-600 dark:text-blue-400 font-bold text-sm mb-1">NDVI Correlation</div>
+                <div className="text-[10px] text-blue-800/70 dark:text-blue-300/70 leading-tight">Higher is better</div>
               </div>
               <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/15">
-                <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm mb-1">NDVI Loss</div>
-                <div className="text-[10px] text-emerald-800/70 dark:text-emerald-300/70 leading-tight">Vegetation/NDVI consistency</div>
+                <div className="text-emerald-600 dark:text-emerald-400 font-bold text-sm mb-1">ERGAS</div>
+                <div className="text-[10px] text-emerald-800/70 dark:text-emerald-300/70 leading-tight">Lower is better</div>
               </div>
             </div>
           </div>

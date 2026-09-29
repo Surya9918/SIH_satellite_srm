@@ -38,8 +38,8 @@ export const SolutionSection: React.FC = () => {
                   <CheckCircle2 className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold text-primary">Spectral Consistency & NDVI Loss</h4>
-                  <p className="text-xs text-secondary mt-0.5">Penalizes spectral deviation across vegetation and moisture indices, ensuring that reconstructed pixels maintain correct scientific reflectance.</p>
+                  <h4 className="text-sm font-semibold text-primary">Spectral Consistency & NDVI Fidelity</h4>
+                  <p className="text-xs text-secondary mt-0.5">Tracks vegetation and moisture index agreement so reconstructed pixels remain radiometrically consistent.</p>
                 </div>
               </div>
 

@@ -147,11 +147,12 @@ export interface MetricEntry {
 }
 
 export interface ValidationMetrics {
-  l1_loss: MetricEntry;
-  perceptual_loss: MetricEntry;
-  spectral_loss: MetricEntry;
-  ndvi_loss: MetricEntry;
-  ndvi_mae: MetricEntry;
+  psnr_db?: MetricEntry;
+  ssim?: MetricEntry;
+  sam_deg?: MetricEntry;
+  ergas?: MetricEntry;
+  ndvi_correlation?: MetricEntry;
+  ndvi_mae?: MetricEntry;
   uncertainty?: {
     mean: number;
     max: number;
@@ -159,6 +160,16 @@ export interface ValidationMetrics {
   };
   scale_factor: number;
   hasReferenceData: boolean;
+  status?: 'ready' | 'calculating' | 'unavailable';
+  message?: string;
+  losses?: {
+    train_loss?: number[];
+    validation_loss?: number[];
+    epochs?: number[];
+    has_history?: boolean;
+    status?: 'ready' | 'unavailable';
+    message?: string;
+  };
 }
 
 export interface TelemetryData {
@@ -179,6 +190,7 @@ export interface SRMOutputs {
   srGeoTiffUrl: string;
   uncertaintyGeoTiffUrl: string;
   metricsJsonUrl: string;
+  originalImageUrl?: string;
   lrPreviewUrl: string;
   srPreviewUrl: string;
   uncertaintyPreviewUrl: string;
@@ -186,8 +198,8 @@ export interface SRMOutputs {
   validationReportUrl?: string;
   b02PreviewUrl?: string;
   b03PreviewUrl?: string;
-  b04PreviewUrl?: string;
   b08PreviewUrl?: string;
+  b04PreviewUrl?: string;
   falseColorPreviewUrl?: string;
 }
 

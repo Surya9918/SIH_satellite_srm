@@ -19,5 +19,19 @@ class TestNormalization(unittest.TestCase):
         # Verify within roundoff error
         np.testing.assert_allclose(raw, recovered, atol=2.0)
 
+    def test_percentile_normalization_restores_physical_reflectance(self):
+        raw = np.linspace(1000.0, 9000.0, 4 * 16 * 16, dtype=np.float32).reshape(4, 16, 16)
+        norm = RadiometricNormalizer(use_percentiles=True, p_min=1.0, p_max=99.0)
+
+        normalized = norm.normalize(raw)
+        restored = norm.unnormalize(normalized)
+        expected = np.empty_like(raw)
+        for band in range(raw.shape[0]):
+            low = norm.stats["mins"][band]
+            high = norm.stats["maxs"][band]
+            expected[band] = np.clip(raw[band] / norm.scale_factor, low, high)
+
+        np.testing.assert_allclose(restored, expected, atol=1e-6)
+
 if __name__ == "__main__":
     unittest.main()

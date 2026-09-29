@@ -13,7 +13,7 @@ export const WhySRMSection: React.FC = () => {
     {
       icon: Gauge,
       title: 'Strict Spectral Consistency',
-      description: 'Differentiable NDVI loss functions enforce exact radiometric conservation, ensuring vegetative indexes and band ratios remain scientifically valid.'
+      description: 'Multispectral training and NDVI quality checks support radiometric consistency across vegetation indexes and band ratios.'
     },
     {
       icon: ShieldCheck,

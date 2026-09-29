@@ -53,7 +53,7 @@ export const ArchitectureFlow: React.FC = () => {
       purpose: 'Deep learning super-resolution using shifted-window residual Swin Transformer blocks tuned for multispectral satellite data.',
       input: '64x64x4 patch tensors (10m ground resolution)',
       output: '192x192x4 reconstructed tensors (3.33m ground resolution)',
-      technology: 'PyTorch, CUDA, Swin Transformer (RSTB), Spectral Loss',
+      technology: 'PyTorch, CUDA, Swin Transformer (RSTB), spectral consistency',
       status: 'MODEL WEIGHTS TRAINED'
     },
     {

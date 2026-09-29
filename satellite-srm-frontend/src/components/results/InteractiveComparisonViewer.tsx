@@ -361,8 +361,8 @@ export const InteractiveComparisonViewer: React.FC<InteractiveComparisonViewerPr
         <div
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
           style={{
-            clipPath: `polygon(${position}% 0%, 100% 0%, 100% 100%, ${position}% 100%)`,
-            WebkitClipPath: `polygon(${position}% 0%, 100% 0%, 100% 100%, ${position}% 100%)`,
+            clipPath: `inset(0 0 0 ${position}%)`,
+            WebkitClipPath: `inset(0 0 0 ${position}%)`,
           }}
         >
           <div
