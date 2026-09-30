@@ -45,7 +45,12 @@ data/outputs/*
 !data/outputs/.gitkeep
 satellite-srm-backend/data/uploads/*
 satellite-srm-backend/data/outputs/*
+!satellite-srm-backend/data/outputs/checkpoints/
+!satellite-srm-backend/data/outputs/checkpoints/srm_corrected_v1.pt
 
 # Local environment
 .env
 .env.local
+
+# Local backup files
+*.bak

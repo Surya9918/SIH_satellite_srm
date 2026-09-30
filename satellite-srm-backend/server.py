@@ -415,47 +415,43 @@ def validate_four_bands(band_paths: dict[str, str]) -> tuple[bool, str, dict]:
 def stack_four_bands(band_paths: dict[str, str], output_stacked_path: str):
     """
     Stacks four separate band files into a single 4-channel GeoTIFF
-    with strict channel order:
+    with strict channel order, PRESERVING uint16 DN values and CRS/transform.
       Channel 0: B02 (Blue)
       Channel 1: B03 (Green)
       Channel 2: B04 (Red)
       Channel 3: B08 (NIR)
     """
     import numpy as np
-    from PIL import Image
+    import rasterio
 
-    def read_single_channel(p: str) -> np.ndarray:
-        with Image.open(p) as img:
-            arr = np.array(img)
-            if arr.ndim == 3:
-                arr = arr[:, :, 0]
-            elif arr.ndim > 3:
-                arr = np.squeeze(arr)
-            return arr
+    # Read each band preserving original dtype (uint16)
+    arrays = []
+    ref_profile = None
+    for b_name in ["b02", "b03", "b04", "b08"]:
+        with rasterio.open(band_paths[b_name]) as src:
+            arr = src.read(1)  # Single band → (H, W)
+            arrays.append(arr)
+            if ref_profile is None:
+                ref_profile = src.profile.copy()
 
-    b02_arr = read_single_channel(band_paths["b02"])
-    b03_arr = read_single_channel(band_paths["b03"])
-    b04_arr = read_single_channel(band_paths["b04"])
-    b08_arr = read_single_channel(band_paths["b08"])
+    stacked = np.stack(arrays, axis=0)  # (4, H, W) — preserves uint16
 
-    # Ensure 8-bit uint8 representations for Pillow RGBA packaging
-    def to_u8(a):
-        if a.dtype == np.uint8:
-            return a
-        # Adaptive stretch to uint8
-        mn, mx = float(np.min(a)), float(np.max(a))
-        if mx - mn < 1e-5:
-            return np.full_like(a, 128, dtype=np.uint8)
-        norm = np.clip((a.astype(np.float32) - mn) / (mx - mn), 0.0, 1.0)
-        return (norm * 255.0).astype(np.uint8)
+    # Write 4-band GeoTIFF preserving CRS, transform, and dtype
+    ref_profile.update({
+        "count": 4,
+        "dtype": stacked.dtype,
+        "driver": "GTiff",
+        "compress": "deflate"
+    })
+    with rasterio.open(output_stacked_path, "w", **ref_profile) as dst:
+        dst.write(stacked)
+        dst.set_band_description(1, "B02")
+        dst.set_band_description(2, "B03")
+        dst.set_band_description(3, "B04")
+        dst.set_band_description(4, "B08")
 
-    stacked_img = Image.merge("RGBA", (
-        Image.fromarray(to_u8(b02_arr)),  # Channel 0 / R = B02
-        Image.fromarray(to_u8(b03_arr)),  # Channel 1 / G = B03
-        Image.fromarray(to_u8(b04_arr)),  # Channel 2 / B = B04
-        Image.fromarray(to_u8(b08_arr)),  # Channel 3 / A = B08
-    ))
-    stacked_img.save(output_stacked_path, format="TIFF")
+    print(f"[stack_four_bands] Stacked 4 bands -> {output_stacked_path}")
+    print(f"  dtype={stacked.dtype}, shape={stacked.shape}, min={stacked.min()}, max={stacked.max()}")
     return output_stacked_path
 
 
@@ -532,42 +528,121 @@ def load_and_normalize_raster(input_path: str):
     return pil_img, r, g, b, nir
 
 
-def generate_product_for_raster(input_path: str, job_id: str, scale_factor: float = 3.0):
+def generate_product_for_raster(input_path: str, job_id: str, model_name: str, scale_factor: float = 3.0):
     """Generate true super-resolved products, NDVI, uncertainty and metrics for uploaded raster."""
+    if "swinir" not in model_name.lower():
+        raise ValueError(f"Model '{model_name}' is not supported. Only Multispectral SwinIR is a validated trained model.")
+        
     try:
-        from PIL import Image, ImageFilter, ImageEnhance
+        from PIL import Image
         import numpy as np
         import json
+        
+        from satellite_srm.models.model_factory import create_model
+        from satellite_srm.models.pytorch_loader import load_pytorch_checkpoint
+        from satellite_srm.inference.pipeline import FullSceneSRMPipeline
+        from satellite_srm.geospatial.geotiff import read_geotiff
 
-        # Load and normalize raw GeoTIFF radiometry
-        pil_img, r_raw, g_raw, b_raw, nir_raw = load_and_normalize_raster(input_path)
-        w, h = pil_img.size
-        target_w = max(512, int(w * scale_factor))
-        target_h = max(512, int(h * scale_factor))
-        target_w = min(target_w, 2048)
-        target_h = min(target_h, 2048)
+        # 1. Config and Checkpoint
+        config = {
+            "model": {
+                "backend": "swinir",
+                "scale_factor": scale_factor,
+                "swinir": {
+                    "in_channels": 4,
+                    "out_channels": 4,
+                    "embed_dim": 60,
+                    "depths": [4, 4, 4, 4],
+                    "num_heads": [6, 6, 6, 6],
+                    "window_size": 4
+                }
+            },
+            "inference": {
+                "scale_factor": scale_factor,
+                "tile_size": 128,
+                "overlap": 32,
+                "blending_method": "weighted_hann",
+                "uncertainty": {"mc_passes": 8}
+            }
+        }
+        model = create_model(config)
+        ckpt_path = os.path.join(OUTPUT_DIR, "checkpoints", "srm_corrected_v1.pt")
+        
+        print(f"Loading checkpoint from: {ckpt_path}")
+        print(f"Checkpoint size: {os.path.getsize(ckpt_path)} bytes")
+        ckpt = load_pytorch_checkpoint(ckpt_path)
+        state_dict = ckpt.get("model_state", ckpt.get("model_state_dict", ckpt))
+        res = model.load_state_dict(state_dict, strict=True)
+        print(f"Loaded checkpoint with {len(res['missing_keys'])} missing keys and {len(res['unexpected_keys'])} unexpected keys.")
+        model.eval()
+        
+        print(f"Model class: {model.__class__.__name__}")
+        print(f"Number of parameters: {sum(np.prod(p.numpy().shape) for p in model.parameters())}")
 
-        # 1. Super-Resolution image with deep residual sharpening
-        sr_img = pil_img.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        enhancer = ImageEnhance.Sharpness(sr_img)
-        sr_img = enhancer.enhance(1.25)
-        color_enh = ImageEnhance.Color(sr_img)
-        sr_img = color_enh.enhance(1.06)
+        sr_tif_name = f"SR_product_{job_id}.tif"
+        unc_tif_name = f"uncertainty_map_{job_id}.tif"
+        
+        output_sr_path = str(OUTPUT_DIR / sr_tif_name)
+        output_uncertainty_path = str(OUTPUT_DIR / unc_tif_name)
 
-        # 2. Low Resolution 10m image simulation
-        lr_coarse = sr_img.resize((max(64, target_w // 3), max(64, target_h // 3)), Image.Resampling.BOX)
-        lr_img = lr_coarse.resize((target_w, target_h), Image.Resampling.NEAREST)
-        lr_img = lr_img.filter(ImageFilter.GaussianBlur(radius=0.8))
+        # 2. Run Inference
+        pipeline = FullSceneSRMPipeline(model=model, config=config)
+        
+        # Read the raw input for logging
+        lr_raster = read_geotiff(input_path)
+        lr_arr = lr_raster.data
+        print(f"Input shape: {lr_arr.shape}")
+        print(f"Input dtype: {lr_arr.dtype}")
+        lr_norm = pipeline.normalizer.normalize(lr_arr)
+        print(f"Normalized range: [{np.min(lr_norm)}, {np.max(lr_norm)}]")
+        print(f"Input resolution (GSD): {lr_raster.metadata.gsd_x} m")
+        
+        pipeline_res = pipeline.run(input_path, output_sr_path, output_uncertainty_path)
 
-        # 3. NDVI Map
-        sr_arr = np.array(sr_img, dtype=np.float32)
-        r, g, b = sr_arr[:, :, 0], sr_arr[:, :, 1], sr_arr[:, :, 2]
-        is_water = (b > r) & (b > g * 0.9) & (r < 75)
-        nir = np.where(is_water, b * 0.3, g * 1.55 + r * 0.35)
-        nir = np.clip(nir, 0, 255)
-        ndvi = (nir - r) / (nir + r + 1e-5)
+        # 3. Generate preview PNGs
+        sr_raster = read_geotiff(output_sr_path)
+        sr_arr = sr_raster.data  # shape (4, H, W)
+        target_h, target_w = sr_arr.shape[1], sr_arr.shape[2]
+        
+        print(f"Output shape: {sr_arr.shape}")
+        print(f"Output dtype: {sr_arr.dtype}")
+        print(f"Output min/max: [{np.min(sr_arr)}, {np.max(sr_arr)}]")
+        print(f"Output mean: {np.mean(sr_arr)}")
+        print(f"Output resolution (GSD): {sr_raster.metadata.gsd_x} m")
+        print(f"CRS: {sr_raster.metadata.crs}")
+        
+        # Scale to 0-255 for PNG previews
+        b = np.clip(sr_arr[0] * 255.0, 0, 255).astype(np.uint8)
+        g = np.clip(sr_arr[1] * 255.0, 0, 255).astype(np.uint8)
+        r = np.clip(sr_arr[2] * 255.0, 0, 255).astype(np.uint8)
+        nir = np.clip(sr_arr[3] * 255.0, 0, 255).astype(np.uint8)
+
+        sr_png_name = f"sr_{job_id}.png"
+        Image.merge("RGB", (Image.fromarray(r), Image.fromarray(g), Image.fromarray(b))).save(OUTPUT_DIR / sr_png_name, "PNG")
+
+        b02_png_name = f"b02_{job_id}.png"
+        b03_png_name = f"b03_{job_id}.png"
+        b04_png_name = f"b04_{job_id}.png"
+        b08_png_name = f"b08_{job_id}.png"
+        Image.fromarray(b).save(OUTPUT_DIR / b02_png_name, "PNG")
+        Image.fromarray(g).save(OUTPUT_DIR / b03_png_name, "PNG")
+        Image.fromarray(r).save(OUTPUT_DIR / b04_png_name, "PNG")
+        Image.fromarray(nir).save(OUTPUT_DIR / b08_png_name, "PNG")
+
+        false_color_png_name = f"false_color_{job_id}.png"
+        Image.merge("RGB", (Image.fromarray(nir), Image.fromarray(r), Image.fromarray(g))).save(OUTPUT_DIR / false_color_png_name, "PNG")
+
+        lr_b = np.clip(lr_norm[0] * 255.0, 0, 255).astype(np.uint8)
+        lr_g = np.clip(lr_norm[1] * 255.0, 0, 255).astype(np.uint8)
+        lr_r = np.clip(lr_norm[2] * 255.0, 0, 255).astype(np.uint8)
+        lr_img = Image.merge("RGB", (Image.fromarray(lr_r), Image.fromarray(lr_g), Image.fromarray(lr_b)))
+        lr_png_name = f"lr_{job_id}.png"
+        lr_img.save(OUTPUT_DIR / lr_png_name, "PNG")
+
+        # NDVI
+        ndvi = (sr_arr[3] - sr_arr[2]) / (sr_arr[3] + sr_arr[2] + 1e-5)
         ndvi_norm = np.clip((ndvi + 0.1) * 1.4, 0.0, 1.0)
-
+        is_water = (sr_arr[0] > sr_arr[2]) & (sr_arr[0] > sr_arr[1] * 0.9) & (sr_arr[2] < 0.3)
         ndvi_rgb = np.zeros((target_h, target_w, 3), dtype=np.uint8)
         for y in range(target_h):
             for x in range(target_w):
@@ -579,34 +654,26 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
                     elif v < 0.45: ndvi_rgb[y, x] = [215, 205, 55]
                     elif v < 0.7: ndvi_rgb[y, x] = [65, 185, 50]
                     else: ndvi_rgb[y, x] = [15, 115, 30]
-        ndvi_img = Image.fromarray(ndvi_rgb)
+        ndvi_png_name = f"ndvi_comparison_{job_id}.png"
+        Image.fromarray(ndvi_rgb).save(OUTPUT_DIR / ndvi_png_name, "PNG")
 
-        # 4. Uncertainty Map
-        gray = sr_img.convert("L")
-        edges = np.array(gray.filter(ImageFilter.FIND_EDGES), dtype=np.float32) / 255.0
-        unc_val = np.clip(edges * 0.85 + np.random.uniform(0.02, 0.12, (target_h, target_w)), 0.0, 1.0)
+        # Uncertainty Map Image
+        unc_raster = read_geotiff(output_uncertainty_path)
+        unc_val = unc_raster.data[0] # (H, W)
+        unc_mean = float(np.mean(unc_val))
+        unc_max = float(np.max(unc_val))
+        unc_min = float(np.min(unc_val))
         
-        # Dark Blue -> Cyan -> Green -> Yellow -> Orange -> Red colormap (vectorized)
-        unc_val_3d = np.expand_dims(unc_val, axis=-1)
-        c0 = np.array([0, 0, 139])        # Dark Blue (0.0)
-        c1 = np.array([0, 255, 255])      # Cyan      (0.2)
-        c2 = np.array([0, 255, 0])        # Green     (0.4)
-        c3 = np.array([255, 255, 0])      # Yellow    (0.6)
-        c4 = np.array([255, 165, 0])      # Orange    (0.8)
-        c5 = np.array([255, 0, 0])        # Red       (1.0)
-
+        print(f"Uncertainty mean/min/max: {unc_mean:.4f} / {unc_min:.4f} / {unc_max:.4f}")
+        
+        unc_val_3d = np.expand_dims(np.clip(unc_val, 0.0, 1.0), axis=-1)
+        c0, c1, c2, c3, c4, c5 = np.array([0, 0, 139]), np.array([0, 255, 255]), np.array([0, 255, 0]), np.array([255, 255, 0]), np.array([255, 165, 0]), np.array([255, 0, 0])
         cond1 = unc_val_3d < 0.2
         cond2 = (unc_val_3d >= 0.2) & (unc_val_3d < 0.4)
         cond3 = (unc_val_3d >= 0.4) & (unc_val_3d < 0.6)
         cond4 = (unc_val_3d >= 0.6) & (unc_val_3d < 0.8)
         cond5 = unc_val_3d >= 0.8
-
-        t1 = unc_val_3d / 0.2
-        t2 = (unc_val_3d - 0.2) / 0.2
-        t3 = (unc_val_3d - 0.4) / 0.2
-        t4 = (unc_val_3d - 0.6) / 0.2
-        t5 = (unc_val_3d - 0.8) / 0.2
-
+        t1, t2, t3, t4, t5 = unc_val_3d / 0.2, (unc_val_3d - 0.2) / 0.2, (unc_val_3d - 0.4) / 0.2, (unc_val_3d - 0.6) / 0.2, (unc_val_3d - 0.8) / 0.2
         unc_rgb = np.zeros((target_h, target_w, 3), dtype=np.float32)
         unc_rgb += cond1 * (c0 * (1 - t1) + c1 * t1)
         unc_rgb += cond2 * (c1 * (1 - t2) + c2 * t2)
@@ -614,93 +681,18 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
         unc_rgb += cond4 * (c3 * (1 - t4) + c4 * t4)
         unc_rgb += cond5 * (c4 * (1 - t5) + c5 * t5)
         unc_rgb = np.clip(unc_rgb, 0, 255).astype(np.uint8)
-        
-        unc_img = Image.fromarray(unc_rgb)
-
-        # 5. Output Filenames
-        sr_png_name = f"sr_{job_id}.png"
-        lr_png_name = f"lr_{job_id}.png"
         uncertainty_png_name = f"uncertainty_{job_id}.png"
-        ndvi_png_name = f"ndvi_comparison_{job_id}.png"
-        b02_png_name = f"b02_{job_id}.png"
-        b03_png_name = f"b03_{job_id}.png"
-        b04_png_name = f"b04_{job_id}.png"
-        b08_png_name = f"b08_{job_id}.png"
-        false_color_png_name = f"false_color_{job_id}.png"
-        sr_tif_name = f"SR_product_{job_id}.tif"
-        unc_tif_name = f"uncertainty_map_{job_id}.tif"
+        Image.fromarray(unc_rgb).save(OUTPUT_DIR / uncertainty_png_name, "PNG")
+
         metrics_json_name = f"metrics_{job_id}.json"
-
-        sr_img.save(OUTPUT_DIR / sr_png_name, "PNG")
-        lr_img.save(OUTPUT_DIR / lr_png_name, "PNG")
-        ndvi_img.save(OUTPUT_DIR / ndvi_png_name, "PNG")
-        unc_img.save(OUTPUT_DIR / uncertainty_png_name, "PNG")
-        
-        # Save Float32 Uncertainty Map
-        Image.fromarray(unc_val.astype(np.float32)).save(OUTPUT_DIR / unc_tif_name, format="TIFF")
-
-        # 6. Real Single Bands and False Color (CIR)
-        r_u8 = r.astype(np.uint8)
-        g_u8 = g.astype(np.uint8)
-        b_u8 = b.astype(np.uint8)
-        nir_u8 = nir.astype(np.uint8)
-
-        Image.fromarray(b_u8).save(OUTPUT_DIR / b02_png_name, "PNG")
-        Image.fromarray(g_u8).save(OUTPUT_DIR / b03_png_name, "PNG")
-        Image.fromarray(r_u8).save(OUTPUT_DIR / b04_png_name, "PNG")
-        Image.fromarray(nir_u8).save(OUTPUT_DIR / b08_png_name, "PNG")
-        # False Color (CIR): NIR -> Red, B04 -> Green, B03 -> Blue
-        Image.merge("RGB", (Image.fromarray(nir_u8), Image.fromarray(r_u8), Image.fromarray(g_u8))).save(
-            OUTPUT_DIR / false_color_png_name, "PNG"
-        )
-
-        # 7. Output 4-Band GeoTIFF
-        # Band order preserved: Band1=B02(blue), Band2=B03(green), Band3=B04(red), Band4=B08(NIR)
-        # Each channel is individually super-resolved and stored as a separate band.
-        # We rescale the SR image bands (from the SR composite) to match output dimensions.
-        import numpy as np
-        sr_arr_full = np.array(sr_img, dtype=np.float32)  # H, W, 3 (RGB composite)
-
-        # For SR band channels: use the per-band SR arrays
-        # B02 (blue), B03 (green), B04 (red) come from the RGB SR image channels
-        b02_sr = Image.fromarray(b_u8).resize((target_w, target_h), Image.Resampling.LANCZOS)
-        b03_sr = Image.fromarray(g_u8).resize((target_w, target_h), Image.Resampling.LANCZOS)
-        b04_sr = Image.fromarray(r_u8).resize((target_w, target_h), Image.Resampling.LANCZOS)
-        b08_sr = Image.fromarray(nir_u8).resize((target_w, target_h), Image.Resampling.LANCZOS)
-
-        # Build 4-band array: [B02, B03, B04, B08] - each is uint8
-        b02_arr = np.array(b02_sr, dtype=np.uint8)
-        b03_arr = np.array(b03_sr, dtype=np.uint8)
-        b04_arr = np.array(b04_sr, dtype=np.uint8)
-        b08_arr = np.array(b08_sr, dtype=np.uint8)
-
-        # Save as 4-band TIFF using PIL RGBA (RGBA maps: R=B02, G=B03, B=B04, A=B08)
-        # Note: PIL RGBA TIFF preserves all 4 channels. Band labeling in GIS tools
-        # will show B02, B03, B04, B08 when loaded with the accompanying metadata.
-        four_band_img = Image.merge('RGBA', (
-            Image.fromarray(b02_arr),  # Band 1 = B02 (Blue)
-            Image.fromarray(b03_arr),  # Band 2 = B03 (Green)
-            Image.fromarray(b04_arr),  # Band 3 = B04 (Red)
-            Image.fromarray(b08_arr),  # Band 4 = B08 (NIR)
-        ))
-        four_band_img.save(OUTPUT_DIR / sr_tif_name, format="TIFF")
-
-        # Realistic high-performance quality metrics
-        unc_mean = round(float(np.mean(unc_val)), 4)
-        unc_max = round(float(np.max(unc_val)), 4)
-        unc_min = round(float(np.min(unc_val)), 4)
         metrics = {
-            "l1_loss": {"bicubic": 0.1250, "model": 0.0210, "gain": -0.1040, "description": "L1 Pixel Loss", "higherIsBetter": False},
-            "perceptual_loss": {"bicubic": 0.3540, "model": 0.0820, "gain": -0.2720, "description": "VGG Perceptual Loss", "higherIsBetter": False},
-            "spectral_loss": {"bicubic": 0.1420, "model": 0.0350, "gain": -0.1070, "description": "Spectral Consistency Loss", "higherIsBetter": False},
-            "ndvi_loss": {"bicubic": 0.0980, "model": 0.0150, "gain": -0.0830, "description": "NDVI Preservation Loss", "higherIsBetter": False},
             "uncertainty": {
                 "mean": unc_mean,
                 "max": unc_max,
                 "min": unc_min
             },
             "scale_factor": scale_factor,
-            "hasReferenceData": True
+            "hasReferenceData": False
         }
         with open(OUTPUT_DIR / metrics_json_name, "w") as f:
             json.dump(metrics, f, indent=2)
@@ -723,6 +715,8 @@ def generate_product_for_raster(input_path: str, job_id: str, scale_factor: floa
             "height": target_h
         }
     except Exception as err:
+        import traceback
+        traceback.print_exc()
         print(f"[Satellite-SRM] Fallback image generation due to: {err}")
         return None
 
@@ -756,7 +750,7 @@ async def process_satellite_srm_task(job_id: str, input_path: str, model_name: s
         elapsed = int(time.time() - start_time)
 
         # Process the raster dynamically
-        product = generate_product_for_raster(input_path, job_id, scale_factor=3.0)
+        product = generate_product_for_raster(input_path, job_id, model_name, scale_factor=3.0)
 
         if product:
             job["outputs"] = {
