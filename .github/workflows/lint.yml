@@ -19,7 +19,7 @@ jobs:
       run: pip install flake8
     - name: Lint with flake8
       run: |
-        cd backend-main/Satellite_SRM_DL
+        cd Satellite_SRM_DL
         flake8 server.py --count --select=E9,F63,F7,F82 --show-source --statistics || true
 
   lint-frontend:

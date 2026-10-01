@@ -12,7 +12,7 @@ jobs:
     
     - name: Build Backend Image
       run: |
-        cd backend-main/Satellite_SRM_DL
+        cd Satellite_SRM_DL
         docker build -t satellite-srm-backend:latest .
         
     - name: Build Frontend Image (if Dockerfile exists)

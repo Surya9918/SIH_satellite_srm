@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: "pip"
-    directory: "/backend-main/Satellite_SRM_DL"
+    directory: "/Satellite_SRM_DL"
     schedule:
       interval: "weekly"
   
