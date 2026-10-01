@@ -27,7 +27,7 @@ The system rigorously preserves:
 
 ## 📁 Repository Structure
 
-- **[`backend-main/Satellite_SRM_DL`](./backend-main/Satellite_SRM_DL)**: 
+- **[`Satellite_SRM_DL`](./Satellite_SRM_DL)**: 
   The Python/FastAPI backend containing the core Deep Learning pipeline (PyTorch/SwinIR) for geospatial data processing, patching, multi-band super-resolution, and tile blending.
 - **[`satellite-srm-frontend`](./satellite-srm-frontend)**: 
   The React 18 / TypeScript frontend application built with Vite and Tailwind CSS. It provides a drag-and-drop interface, active job telemetry, dual-view slider comparisons, and a rich visualization suite.
@@ -57,7 +57,7 @@ start.bat
 ## 📚 Detailed Documentation
 
 For module-specific instructions, architecture diagrams, and scientific metrics, please refer to:
-- [Backend Deep Learning Documentation](./backend-main/Satellite_SRM_DL/README.md)
+- [Backend Deep Learning Documentation](./Satellite_SRM_DL/README.md)
 - [Frontend Mission Control Documentation](./satellite-srm-frontend/README.md)
 
 ## 📄 License

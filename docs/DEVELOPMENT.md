@@ -13,7 +13,7 @@ Use the bundled batch scripts:
 ### Option 2: Linux / macOS Setup
 Use the bash script:
 1. Run `bash scripts/setup.sh`.
-2. Start backend: `cd backend-main/Satellite_SRM_DL && source .venv/bin/activate && uvicorn server:app --reload`
+2. Start backend: `cd Satellite_SRM_DL && source .venv/bin/activate && uvicorn server:app --reload`
 3. Start frontend: `cd satellite-srm-frontend && npm run dev`
 
 ## Code Standards

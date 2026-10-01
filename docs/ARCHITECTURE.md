@@ -16,7 +16,7 @@ graph TD
     ReactApp
     end
 
-    subgraph Backend [backend-main/Satellite_SRM_DL]
+    subgraph Backend [Satellite_SRM_DL]
     FastAPI
     Engine
     end

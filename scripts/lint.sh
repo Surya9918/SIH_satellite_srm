@@ -4,7 +4,7 @@ set -e
 echo "🔍 Linting Satellite-SRM Project..."
 
 echo "==> Linting Python (Backend)..."
-cd backend-main/Satellite_SRM_DL
+cd Satellite_SRM_DL
 if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi

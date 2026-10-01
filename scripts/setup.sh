@@ -4,7 +4,7 @@ set -e
 echo "🛰️ Setting up Satellite-SRM for macOS/Linux..."
 
 echo "==> Setting up Backend..."
-cd backend-main/Satellite_SRM_DL
+cd Satellite_SRM_DL
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

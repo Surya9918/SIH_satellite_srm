@@ -11,7 +11,7 @@ echo Installing Geospatial libraries and complex C++ libraries (OpenCV, Streamli
 call C:\Users\vemul\anaconda3\condabin\conda.bat install -c conda-forge gdal geopandas rasterio pyproj shapely opencv streamlit -y
 
 echo Installing remaining backend requirements via pip...
-cd backend-main\Satellite_SRM_DL
+cd Satellite_SRM_DL
 call C:\Users\vemul\anaconda3\condabin\conda.bat run -n satellite-srm pip install -r requirements.txt
 cd ..\..
 
