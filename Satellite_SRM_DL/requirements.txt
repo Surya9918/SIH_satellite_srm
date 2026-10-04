@@ -30,3 +30,4 @@ einops>=0.6.0
 matplotlib>=3.7.0
 fastapi
 uvicorn[standard]
+python-multipart
